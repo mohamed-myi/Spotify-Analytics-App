@@ -1,0 +1,226 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// USER & AUTH
+
+model User {
+  id              String   @id @default(cuid())
+  spotifyId       String   @unique @map("spotify_id")
+  displayName     String?  @map("display_name")
+  email           String?
+  imageUrl        String?  @map("image_url")
+  country         String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  lastIngestedAt  DateTime? @map("last_ingested_at")
+
+  auth            SpotifyAuth?
+  settings        UserSettings?
+  listeningEvents ListeningEvent[]
+  trackStats      UserTrackStats[]
+  artistStats     UserArtistStats[]
+  timeBucketStats UserTimeBucketStats[]
+  hourStats       UserHourStats[]
+  importJobs      ImportJob[]
+
+  @@map("users")
+}
+
+model SpotifyAuth {
+  userId          String   @id @map("user_id")
+  refreshToken    String   @map("refresh_token")
+  scopes          String
+  lastRefreshAt   DateTime @default(now()) @map("last_refresh_at")
+  isValid         Boolean  @default(true) @map("is_valid")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("spotify_auth")
+}
+
+// MUSIC CATALOG (Global)
+
+model Track {
+  id              String   @id @default(cuid())
+  spotifyId       String   @unique @map("spotify_id")
+  name            String
+  durationMs      Int      @map("duration_ms")
+  albumId         String?  @map("album_id")
+  previewUrl      String?  @map("preview_url")
+
+  album           Album?   @relation(fields: [albumId], references: [id])
+  artists         TrackArtist[]
+  listeningEvents ListeningEvent[]
+  userStats       UserTrackStats[]
+
+  @@index([spotifyId])
+  @@map("tracks")
+}
+
+model Artist {
+  id              String   @id @default(cuid())
+  spotifyId       String   @unique @map("spotify_id")
+  name            String
+  imageUrl        String?  @map("image_url")
+  genres          String[] @default([])
+
+  tracks          TrackArtist[]
+  userStats       UserArtistStats[]
+
+  @@index([spotifyId])
+  @@map("artists")
+}
+
+model Album {
+  id              String   @id @default(cuid())
+  spotifyId       String   @unique @map("spotify_id")
+  name            String
+  imageUrl        String?  @map("image_url")
+  releaseDate     String?  @map("release_date")
+
+  tracks          Track[]
+
+  @@index([spotifyId])
+  @@map("albums")
+}
+
+model TrackArtist {
+  trackId         String   @map("track_id")
+  artistId        String   @map("artist_id")
+
+  track           Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  artist          Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@id([trackId, artistId])
+  @@map("track_artists")
+}
+
+// RAW LISTENING EVENTS (Source of Truth)
+
+model ListeningEvent {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  trackId         String   @map("track_id")
+  playedAt        DateTime @map("played_at")
+  msPlayed        Int      @map("ms_played")
+  source          String   @default("api")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track           Track    @relation(fields: [trackId], references: [id])
+
+  @@unique([userId, trackId, playedAt])
+  @@index([userId, playedAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("listening_events")
+}
+
+// AGGREGATED STATS (Read-Optimized)
+
+model UserTrackStats {
+  userId          String   @map("user_id")
+  trackId         String   @map("track_id")
+  playCount       Int      @default(0) @map("play_count")
+  totalMs         BigInt   @default(0) @map("total_ms")
+  lastPlayedAt    DateTime? @map("last_played_at")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track           Track    @relation(fields: [trackId], references: [id])
+
+  @@id([userId, trackId])
+  @@index([userId, playCount(sort: Desc)])
+  @@map("user_track_stats")
+}
+
+model UserArtistStats {
+  userId          String   @map("user_id")
+  artistId        String   @map("artist_id")
+  playCount       Int      @default(0) @map("play_count")
+  totalMs         BigInt   @default(0) @map("total_ms")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist          Artist   @relation(fields: [artistId], references: [id])
+
+  @@id([userId, artistId])
+  @@index([userId, playCount(sort: Desc)])
+  @@map("user_artist_stats")
+}
+
+model UserTimeBucketStats {
+  userId          String   @map("user_id")
+  bucketType      String   @map("bucket_type")
+  bucketDate      DateTime @map("bucket_date")
+  playCount       Int      @default(0) @map("play_count")
+  totalMs         BigInt   @default(0) @map("total_ms")
+  uniqueTracks    Int      @default(0) @map("unique_tracks")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, bucketType, bucketDate])
+  @@index([userId, bucketType, bucketDate(sort: Desc)])
+  @@map("user_time_bucket_stats")
+}
+
+model UserHourStats {
+  userId          String   @map("user_id")
+  hour            Int
+  playCount       Int      @default(0) @map("play_count")
+  totalMs         BigInt   @default(0) @map("total_ms")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, hour])
+  @@map("user_hour_stats")
+}
+
+// APP-SPECIFIC TABLES
+
+model ImportJob {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  fileName        String   @map("file_name")
+  status          String   @default("pending")
+  totalEvents     Int      @default(0) @map("total_events")
+  processedEvents Int      @default(0) @map("processed_events")
+  errorMessage    String?  @map("error_message")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("import_jobs")
+}
+
+model UserSettings {
+  userId              String   @id @map("user_id")
+  isPublicProfile     Boolean  @default(false) @map("is_public_profile")
+  shareTopTracks      Boolean  @default(true) @map("share_top_tracks")
+  shareTopArtists     Boolean  @default(true) @map("share_top_artists")
+  shareListeningTime  Boolean  @default(true) @map("share_listening_time")
+  emailNotifications  Boolean  @default(false) @map("email_notifications")
+  timezone            String   @default("UTC")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model MetadataRefreshLog {
+  id              String   @id @default(cuid())
+  entityType      String   @map("entity_type")
+  entityId        String   @map("entity_id")
+  lastRefreshedAt DateTime @default(now()) @map("last_refreshed_at")
+  nextRefreshAt   DateTime? @map("next_refresh_at")
+  errorCount      Int      @default(0) @map("error_count")
+
+  @@unique([entityType, entityId])
+  @@index([nextRefreshAt])
+  @@map("metadata_refresh_log")
+}
