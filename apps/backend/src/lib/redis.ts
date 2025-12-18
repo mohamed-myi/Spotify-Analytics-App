@@ -1,26 +1,14 @@
 import Redis from 'ioredis';
 
-// Lazy-init Redis to avoid failing at build time when env vars aren't set
-let _redis: Redis | null = null;
-
-function getRedisUrl(): string {
-    const url = process.env.REDIS_URL;
-    if (!url) {
-        throw new Error('REDIS_URL environment variable is required');
-    }
-    return url;
+// Redis URL is required at runtime (Railway provides this)
+const redisUrl = process.env.REDIS_URL;
+if (!redisUrl) {
+    throw new Error('REDIS_URL environment variable is required');
 }
 
-// Main Redis connection for BullMQ and general use  
-export const redis: Redis = new Proxy({} as Redis, {
-    get(_, prop) {
-        if (!_redis) {
-            _redis = new Redis(getRedisUrl(), {
-                maxRetriesPerRequest: null,
-            });
-        }
-        return (_redis as any)[prop];
-    },
+// Main Redis connection for BullMQ and general use
+export const redis = new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
 });
 
 // Track requests per minute to stay under Spotify's 180/min limit
