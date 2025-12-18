@@ -81,7 +81,7 @@ export async function refreshUserToken(userId: string): Promise<TokenResult | nu
     }
 }
 
-// Marks a user's token as invalid (called when revoked)
+// Marks a user's token as invalid 
 export async function invalidateUserToken(userId: string): Promise<void> {
     await prisma.spotifyAuth.update({
         where: { userId },

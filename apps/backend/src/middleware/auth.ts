@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../lib/prisma';
 
-// Routes that don't require authentication
+// Routes that don't require session-based authentication
 const PUBLIC_ROUTES = ['/health', '/auth/login', '/auth/callback', '/auth/logout'];
 
 const COOKIE_OPTIONS = {
@@ -23,9 +23,9 @@ export async function authMiddleware(
     request: FastifyRequest,
     reply: FastifyReply
 ): Promise<void> {
-    // Skip auth for public routes
+    // Skip auth for public routes and cron routes (which have their own auth)
     const path = request.url.split('?')[0]; // Remove query params
-    if (PUBLIC_ROUTES.some((route) => path === route || path.startsWith('/auth/'))) {
+    if (PUBLIC_ROUTES.some((route) => path === route || path.startsWith('/auth/') || path.startsWith('/cron/'))) {
         return;
     }
 

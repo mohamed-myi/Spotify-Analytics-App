@@ -33,6 +33,11 @@ jobs:
       - name: Build (frontend)
         run: npm run build --workspace=frontend
       
-      # todo:
-      # - name: Run tests
-      #   run: npm test
+      - name: Run unit tests 
+        run: npm run test:unit --workspace=backend
+      
+      - name: Run integration tests (mocked)
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+        run: npm run test:integration --workspace=backend -- --testPathIgnorePatterns=ingestion

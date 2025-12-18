@@ -52,3 +52,24 @@ export interface SpotifyArtist {
     id: string;
     name: string;
 }
+
+// Play context (album, playlist, or artist the track was played from)
+export interface SpotifyPlayContext {
+    type: 'album' | 'artist' | 'playlist';
+    href: string;
+    uri: string;
+}
+
+// Full artist with images and genres (from /artists endpoint)
+export interface SpotifyFullArtist {
+    id: string;
+    name: string;
+    images: Array<{ url: string; height: number; width: number }>;
+    genres: string[];
+    popularity: number;
+}
+
+// Response from GET /artists?ids=...
+export interface SpotifyArtistsBatchResponse {
+    artists: SpotifyFullArtist[];
+}

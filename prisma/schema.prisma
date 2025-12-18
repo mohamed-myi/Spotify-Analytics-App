@@ -107,6 +107,7 @@ model ListeningEvent {
   trackId         String   @map("track_id")
   playedAt        DateTime @map("played_at")
   msPlayed        Int      @map("ms_played")
+  isEstimated     Boolean  @default(true) @map("is_estimated")
   source          String   @default("api")
   createdAt       DateTime @default(now()) @map("created_at")
 
