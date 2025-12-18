@@ -1,3 +1,17 @@
+// Mock env module BEFORE any imports to prevent process.exit(1)
+jest.mock('@/env', () => ({
+    env: {
+        NODE_ENV: 'test',
+        PORT: 3001,
+        DATABASE_URL: 'postgresql://mock:5432/db',
+        REDIS_URL: 'redis://mock:6379',
+        FRONTEND_URL: 'http://localhost:3000',
+        SPOTIFY_CLIENT_ID: 'mock-client-id',
+        SPOTIFY_CLIENT_SECRET: 'mock-client-secret',
+        ENCRYPTION_KEY: '0'.repeat(64),
+    },
+}));
+
 import { FastifyInstance } from 'fastify';
 import { prisma } from '@/lib/prisma';
 import { redis } from '@/lib/redis';
