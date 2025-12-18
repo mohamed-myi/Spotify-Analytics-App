@@ -23,7 +23,7 @@ export function MoodChart() {
     if (isLoading) return <div className="h-[350px] w-full animate-pulse bg-muted/20 rounded-xl" />;
 
     return (
-        <Card className="col-span-full lg:col-span-2 shadow-lg border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
+        <Card disableHover className="col-span-full lg:col-span-2 shadow-lg border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
             <CardHeader>
                 <div className="flex items-center justify-between">
                     <div>

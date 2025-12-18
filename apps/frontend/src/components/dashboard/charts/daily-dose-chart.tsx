@@ -29,7 +29,7 @@ export function DailyDoseChart() {
     if (isLoading) return <div className="h-[350px] w-full animate-pulse bg-muted/20 rounded-xl" />;
 
     return (
-        <Card className="col-span-1 shadow-lg border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
+        <Card disableHover className="col-span-1 shadow-lg border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
             <CardHeader>
                 <CardTitle className="bg-gradient-to-r from-teal-400 to-emerald-500 bg-clip-text text-transparent">
                     Daily Dose

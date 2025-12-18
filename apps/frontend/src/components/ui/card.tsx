@@ -6,11 +6,12 @@ import { cn } from "@/lib/utils";
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
     variant?: "poster" | "wide" | "circle" | "standard" | "square";
+    disableHover?: boolean;
     children: React.ReactNode;
 }
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
-    ({ className, variant = "standard", children, ...props }, ref) => {
+    ({ className, variant = "standard", disableHover = false, children, ...props }, ref) => {
         const variants = {
             poster: "aspect-[2/3] w-full",
             wide: "aspect-video w-full",
@@ -22,7 +23,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
         return (
             <motion.div
                 ref={ref}
-                whileHover={{ scale: 1.05, zIndex: 10 }}
+                whileHover={disableHover ? undefined : { scale: 1.05, zIndex: 10 }}
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
                 className={cn(
                     "relative overflow-hidden rounded-lg bg-surface transition-colors hover:shadow-lg hover:shadow-primary/20",
