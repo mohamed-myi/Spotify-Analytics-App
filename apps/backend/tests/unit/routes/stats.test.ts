@@ -19,12 +19,28 @@ jest.mock('@/lib/prisma', () => ({
     },
 }));
 
-jest.mock('@/lib/redis', () => ({
-    redis: {
+jest.mock('@/lib/redis', () => {
+    const mockRedis = {
         get: jest.fn(),
         setex: jest.fn(),
-    },
-}));
+        quit: jest.fn(),
+    };
+    return {
+        redis: mockRedis,
+        getOrSet: jest.fn(async (key, ttl, fetcher) => {
+            const cached = await mockRedis.get(key);
+            if (cached) {
+                return JSON.parse(cached);
+            }
+            const data = await fetcher();
+            if (data !== null && data !== undefined) {
+                await mockRedis.setex(key, ttl, JSON.stringify(data));
+            }
+            return data;
+        }),
+        closeRedis: jest.fn(),
+    };
+});
 
 jest.mock('bullmq', () => ({
     Queue: jest.fn().mockImplementation(() => ({
@@ -165,7 +181,36 @@ describe('Stats API', () => {
 
             expect(response.statusCode).toBe(200);
             expect(redis.setex).toHaveBeenCalledWith(
-                'stats:tracks:user-1:medium_term',
+                'stats:tracks:user-1:medium_term:rank',
+                300,
+                expect.any(String)
+            );
+        });
+
+        it('should handle sortBy=time parameter', async () => {
+            (redis.get as jest.Mock).mockResolvedValue(null);
+            (prisma.userTrackStats.findMany as jest.Mock).mockResolvedValue([
+                {
+                    track: { name: 'Long Song', artists: [], album: null },
+                    totalMs: BigInt(600000), // 10 mins
+                    playCount: 2
+                }
+            ]);
+
+            const response = await app.inject({
+                method: 'GET',
+                url: '/me/stats/top/tracks?sortBy=time',
+            });
+
+            expect(response.statusCode).toBe(200);
+            const body = response.json();
+            expect(body).toHaveLength(1);
+            expect(body[0].name).toBe('Long Song');
+            expect(body[0].totalMs).toBe('600000'); // BigInt serialized
+
+            expect(prisma.userTrackStats.findMany).toHaveBeenCalled();
+            expect(redis.setex).toHaveBeenCalledWith(
+                'stats:tracks:user-1:short_term:time', // default range is 4weeks -> short_term
                 300,
                 expect.any(String)
             );
@@ -283,6 +328,42 @@ describe('Stats API', () => {
             expect(prisma.listeningEvent.findMany).toHaveBeenCalled();
             const callArgs = (prisma.listeningEvent.findMany as jest.Mock).mock.calls[0][0];
             expect(callArgs.skip).toBe(25);
+        });
+    });
+
+    describe('GET /me/stats/mood', () => {
+        it('should return aggregated mood stats', async () => {
+            (redis.get as jest.Mock).mockResolvedValue(null);
+            (prisma.listeningEvent.findMany as jest.Mock).mockResolvedValue([
+                {
+                    playedAt: new Date('2025-01-01T12:00:00Z'),
+                    track: { audioFeatures: { valence: 0.8, energy: 0.6 } }
+                },
+                {
+                    playedAt: new Date('2025-01-01T13:00:00Z'),
+                    track: { audioFeatures: { valence: 0.4, energy: 0.8 } }
+                }
+            ]);
+
+            const response = await app.inject({
+                method: 'GET',
+                url: '/me/stats/mood',
+            });
+
+            expect(response.statusCode).toBe(200);
+            const body = response.json();
+
+            expect(body).toHaveLength(1); // One day
+            expect(body[0].date).toBe('2025-01-01');
+            expect(body[0].valence).toBe(0.6); // (0.8 + 0.4) / 2
+            expect(body[0].energy).toBe(0.7);  // (0.6 + 0.8) / 2
+            expect(body[0].count).toBe(2);
+
+            expect(redis.setex).toHaveBeenCalledWith(
+                'stats:mood:user-1',
+                300,
+                expect.any(String)
+            );
         });
     });
 });

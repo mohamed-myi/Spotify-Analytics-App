@@ -1,8 +1,5 @@
-import { config } from 'dotenv';
+import './env';
 import { resolve } from 'path';
-
-// Load .env from project root 
-config({ path: resolve(__dirname, '../../../.env') });
 
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
@@ -57,6 +54,11 @@ export const build = async () => {
       fileSize: 100 * 1024 * 1024, // 100MB Limit
     }
   });
+
+  // Swagger Documentation
+  await server.register(require('@fastify/swagger'), require('./lib/swagger').swaggerOptions);
+  await server.register(require('@fastify/swagger-ui'), require('./lib/swagger').swaggerUiOptions);
+
 
   // Rate limiting (before routes, after auth context is available)
   await registerRateLimiting(server);

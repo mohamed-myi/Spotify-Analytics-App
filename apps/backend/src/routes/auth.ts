@@ -22,7 +22,16 @@ const COOKIE_OPTIONS = {
 
 export async function authRoutes(fastify: FastifyInstance) {
     // GET /auth/login - Redirect to Spotify auth (stricter rate limit: 20/minute)
-    fastify.get('/auth/login', { config: { rateLimit: AUTH_RATE_LIMIT } }, async (request: FastifyRequest, reply: FastifyReply) => {
+    fastify.get('/auth/login', {
+        config: { rateLimit: AUTH_RATE_LIMIT },
+        schema: {
+            description: 'Initiate Spotify OAuth login flow',
+            tags: ['Auth'],
+            response: {
+                302: { description: 'Redirects to Spotify authorization page' }
+            }
+        }
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
         const codeVerifier = generateCodeVerifier();
         const codeChallenge = generateCodeChallenge(codeVerifier);
         const state = generateState();
@@ -42,7 +51,24 @@ export async function authRoutes(fastify: FastifyInstance) {
     });
 
     // GET /auth/callback - Handle Spotify OAuth callback (stricter rate limit: 20/minute)
-    fastify.get('/auth/callback', { config: { rateLimit: AUTH_RATE_LIMIT } }, async (request: FastifyRequest, reply: FastifyReply) => {
+    fastify.get('/auth/callback', {
+        config: { rateLimit: AUTH_RATE_LIMIT },
+        schema: {
+            description: 'Handle Spotify OAuth callback',
+            tags: ['Auth'],
+            querystring: {
+                type: 'object',
+                properties: {
+                    code: { type: 'string' },
+                    state: { type: 'string' },
+                    error: { type: 'string' }
+                }
+            },
+            response: {
+                302: { description: 'Redirects to frontend application' }
+            }
+        }
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
         const { code, state, error } = request.query as {
             code?: string;
             state?: string;
@@ -161,14 +187,52 @@ export async function authRoutes(fastify: FastifyInstance) {
     });
 
     // POST /auth/logout - Clear session
-    fastify.post('/auth/logout', async (request: FastifyRequest, reply: FastifyReply) => {
+    fastify.post('/auth/logout', {
+        schema: {
+            description: 'Logout current user',
+            tags: ['Auth'],
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' }
+                    }
+                }
+            }
+        }
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
         reply.clearCookie('session', { ...COOKIE_OPTIONS, maxAge: 0 });
         reply.clearCookie('auth_status', { ...COOKIE_OPTIONS, httpOnly: false, maxAge: 0 });
         return { success: true };
     });
 
     // GET /auth/me - Get current user
-    fastify.get('/auth/me', async (request: FastifyRequest, reply: FastifyReply) => {
+    fastify.get('/auth/me', {
+        schema: {
+            description: 'Get current authenticated user profile',
+            tags: ['Auth'],
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string' },
+                        spotifyId: { type: 'string' },
+                        displayName: { type: 'string' },
+                        email: { type: 'string' },
+                        imageUrl: { type: 'string', nullable: true },
+                        country: { type: 'string' },
+                        createdAt: { type: 'string', format: 'date-time' }
+                    }
+                },
+                401: {
+                    type: 'object',
+                    properties: {
+                        error: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
         const cookies = request.cookies as Record<string, string>;
         const sessionUserId = cookies.session;
 

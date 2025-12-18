@@ -114,6 +114,31 @@ export async function pingRedis(): Promise<boolean> {
     }
 }
 
+// Helper for caching pattern: Get -> Return if cached -> Fetch -> Set -> Return
+export async function getOrSet<T>(
+    key: string,
+    ttlSeconds: number,
+    fetcher: () => Promise<T>
+): Promise<T> {
+    const cached = await redis.get(key);
+    if (cached) {
+        try {
+            return JSON.parse(cached) as T;
+        } catch (err) {
+            // If parse fails, ignore cache and fetch fresh
+        }
+    }
+
+    const data = await fetcher();
+
+    // Only cache if data is not null
+    if (data !== null && data !== undefined) {
+        await redis.setex(key, ttlSeconds, JSON.stringify(data));
+    }
+
+    return data;
+}
+
 // Close Redis connection
 export async function closeRedis(): Promise<void> {
     await redis.quit();
