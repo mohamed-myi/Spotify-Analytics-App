@@ -7,7 +7,7 @@ const PUBLIC_ROUTES = ['/health', '/auth/login', '/auth/callback', '/auth/logout
 const COOKIE_OPTIONS = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
     path: '/',
     maxAge: 60 * 60 * 24 * 30, // 30 days
 };
