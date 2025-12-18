@@ -5,6 +5,22 @@ import { Card } from "@/components/ui/card";
 import { useRecentHistory } from "@/hooks/use-dashboard";
 import { useState, useMemo } from "react";
 import { ItemModal } from "@/components/dashboard/item-modal";
+import Image from "next/image";
+
+interface HistoryItem {
+    id: string;
+    name: string;
+    artist: string;
+    image?: string;
+    playedAt: string;
+    spotifyId?: string;
+    artistSpotifyId?: string;
+}
+
+interface Section {
+    title: string;
+    items: HistoryItem[];
+}
 
 // Helper to check same day
 const isSameDay = (d1: Date, d2: Date) => {
@@ -14,24 +30,24 @@ const isSameDay = (d1: Date, d2: Date) => {
 };
 
 export default function HistoryPage() {
-    const { history, isLoading } = useRecentHistory(200); // Fetch more for history page
-    const [selectedItem, setSelectedItem] = useState<any>(null);
+    const { history, isLoading } = useRecentHistory(200);
+    const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
 
-    const groupedHistory = useMemo(() => {
+    const groupedHistory = useMemo<Section[]>(() => {
         if (!history) return [];
 
-        const sections = [
-            { title: "Today", items: [] as any[] },
-            { title: "Yesterday", items: [] as any[] },
-            { title: "Earlier this Month", items: [] as any[] },
-            { title: "Older", items: [] as any[] }
+        const sections: Section[] = [
+            { title: "Today", items: [] },
+            { title: "Yesterday", items: [] },
+            { title: "Earlier this Month", items: [] },
+            { title: "Older", items: [] }
         ];
 
         const now = new Date();
         const yesterday = new Date(now);
         yesterday.setDate(yesterday.getDate() - 1);
 
-        history.forEach((item: any) => {
+        history.forEach((item: HistoryItem) => {
             const playedAt = new Date(item.playedAt);
 
             if (isSameDay(playedAt, now)) {
@@ -68,7 +84,7 @@ export default function HistoryPage() {
                                         >
                                             <Card variant="square" className="border border-white/5 group-hover:border-primary/50 transition-colors">
                                                 {item.image ? (
-                                                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                                    <Image src={item.image} alt={item.name} fill className="object-cover" unoptimized />
                                                 ) : (
                                                     <div className="w-full h-full bg-gray-800" />
                                                 )}

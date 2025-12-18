@@ -1,8 +1,8 @@
 
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 
 // Helper to set up common mock routes
-async function setupMockRoutes(page: any) {
+async function setupMockRoutes(page: Page) {
     await page.route('**/auth/me', route => route.fulfill({
         status: 200,
         contentType: 'application/json',

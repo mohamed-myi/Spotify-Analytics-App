@@ -3,16 +3,26 @@
 import { Card } from "@/components/ui/card";
 import { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import Image from "next/image";
+
+interface ContentItem {
+    id: string;
+    name: string;
+    image?: string;
+    artist?: string;
+    spotifyId?: string;
+    artistSpotifyId?: string;
+}
 
 interface ContentRowProps {
     title: string;
-    items: any[];
+    items: ContentItem[];
     type: "track" | "artist" | "wide";
     showTimeRange?: boolean;
     selectedRange?: string;
     showRank?: boolean;
     onRangeChange?: (range: string) => void;
-    onItemClick?: (item: any) => void;
+    onItemClick?: (item: ContentItem) => void;
 }
 
 export function ContentRow({ title, items, type, showTimeRange = false, selectedRange = "all", showRank = false, onRangeChange, onItemClick }: ContentRowProps) {
@@ -93,7 +103,7 @@ export function ContentRow({ title, items, type, showTimeRange = false, selected
                         {type === "artist" && (
                             <div className="w-[180px] space-y-2 relative">
                                 <Card variant="circle" className="border-4 border-transparent hover:border-primary/50 relative">
-                                    <img src={item.image || undefined} alt={item.name} className="w-full h-full object-cover bg-gray-800" />
+                                    <Image src={item.image || '/placeholder.png'} alt={item.name} fill className="object-cover bg-gray-800" unoptimized />
                                 </Card>
                                 <div className="text-center">
                                     <p className="font-medium text-gray-200 truncate">{item.name}</p>
@@ -107,7 +117,7 @@ export function ContentRow({ title, items, type, showTimeRange = false, selected
                         {type === "track" && (
                             <div className="w-[200px] space-y-2 relative">
                                 <Card variant="square">
-                                    <img src={item.image || undefined} alt={item.name} className="w-full h-full object-cover bg-gray-800" />
+                                    <Image src={item.image || '/placeholder.png'} alt={item.name} fill className="object-cover bg-gray-800" unoptimized />
                                 </Card>
                                 <div className="flex gap-3 items-start mt-2">
                                     {showRank && (
@@ -126,7 +136,7 @@ export function ContentRow({ title, items, type, showTimeRange = false, selected
                         {type === "wide" && (
                             <div className="w-[200px] space-y-2 relative">
                                 <Card variant="square" className="relative group/card">
-                                    <img src={item.image || undefined} alt={item.name} className="w-full h-full object-cover opacity-80 group-hover/card:opacity-100 transition bg-gray-800" />
+                                    <Image src={item.image || '/placeholder.png'} alt={item.name} fill className="object-cover opacity-80 group-hover/card:opacity-100 transition bg-gray-800" unoptimized />
 
                                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition bg-black/40">
                                         <div className="rounded-full bg-white p-3 shadow-xl">

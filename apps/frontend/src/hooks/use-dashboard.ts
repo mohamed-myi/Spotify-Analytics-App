@@ -1,6 +1,39 @@
 import useSWR from "swr";
 import { fetcher } from "@/lib/api";
-import { UserProfile, Artist, Track } from "@/lib/types";
+import { UserProfile } from "@/lib/types";
+
+// API response types
+interface SpotifyArtistResponse {
+    id: string;
+    spotifyId: string;
+    name: string;
+    imageUrl?: string;
+    rank?: number;
+}
+
+interface SpotifyTrackResponse {
+    id: string;
+    spotifyId: string;
+    name: string;
+    artists?: { artist: { name: string; spotifyId: string } }[];
+    album?: { name: string; imageUrl?: string };
+    rank?: number;
+}
+
+interface HistoryEvent {
+    id: string;
+    playedAt: string;
+    track: {
+        spotifyId: string;
+        name: string;
+        artists: { artist: { name: string; spotifyId: string } }[];
+        album?: { imageUrl?: string };
+    };
+}
+
+interface HistoryResponse {
+    events: HistoryEvent[];
+}
 
 export function useUser() {
     const { data, error, isLoading } = useSWR<UserProfile>("/auth/me", fetcher, {
@@ -16,10 +49,9 @@ export function useUser() {
 }
 
 export function useTopArtists(range: string = "4weeks") {
-    const { data, error, isLoading } = useSWR<Artist[]>(`/me/stats/top/artists?range=${range}`, fetcher);
+    const { data, error, isLoading } = useSWR<SpotifyArtistResponse[]>(`/me/stats/top/artists?range=${range}`, fetcher);
 
-    // Backend returns Spotify's actual top artists with rank
-    const mappedData = data?.map((item: any, index: number) => ({
+    const mappedData = data?.map((item, index) => ({
         id: item.id,
         spotifyId: item.spotifyId,
         name: item.name,
@@ -35,10 +67,9 @@ export function useTopArtists(range: string = "4weeks") {
 }
 
 export function useTopTracks(range: string = "4weeks") {
-    const { data, error, isLoading } = useSWR<any[]>(`/me/stats/top/tracks?range=${range}`, fetcher);
+    const { data, error, isLoading } = useSWR<SpotifyTrackResponse[]>(`/me/stats/top/tracks?range=${range}`, fetcher);
 
-    // Backend returns Spotify's actual top tracks with rank
-    const mappedData = data?.map((item: any, index: number) => ({
+    const mappedData = data?.map((item, index) => ({
         id: item.id,
         spotifyId: item.spotifyId,
         name: item.name,
@@ -57,9 +88,9 @@ export function useTopTracks(range: string = "4weeks") {
 }
 
 export function useRecentHistory(limit: number = 50) {
-    const { data, error, isLoading } = useSWR<any>(`/me/history?limit=${limit}`, fetcher);
+    const { data, error, isLoading } = useSWR<HistoryResponse>(`/me/history?limit=${limit}`, fetcher);
 
-    const mappedData = data?.events?.map((event: any) => ({
+    const mappedData = data?.events?.map((event) => ({
         id: event.id,
         spotifyId: event.track.spotifyId,
         name: event.track.name,
@@ -75,3 +106,4 @@ export function useRecentHistory(limit: number = 50) {
         isError: error
     };
 }
+

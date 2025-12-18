@@ -2,10 +2,15 @@ import React from 'react'
 import { render, screen } from '@testing-library/react'
 import { Hero } from '../hero'
 
+interface MockMotionProps {
+    children?: React.ReactNode;
+    className?: string;
+}
+
 // Mock framer-motion to avoid animation issues in tests
 jest.mock('framer-motion', () => ({
     motion: {
-        div: ({ children, ...props }: any) => <div {...props}>{children}</div>
+        div: ({ children, ...props }: MockMotionProps) => <div {...props}>{children}</div>
     }
 }))
 

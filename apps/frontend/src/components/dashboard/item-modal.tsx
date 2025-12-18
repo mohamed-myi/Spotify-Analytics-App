@@ -3,11 +3,21 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Play } from "lucide-react";
 import { useEffect } from "react";
+import Image from "next/image";
+
+interface ModalItem {
+    id: string;
+    name: string;
+    image?: string;
+    artist?: string;
+    spotifyId?: string;
+    artistSpotifyId?: string;
+}
 
 interface ItemModalProps {
     isOpen: boolean;
     onClose: () => void;
-    item: any | null;
+    item: ModalItem | null;
 }
 
 export function ItemModal({ isOpen, onClose, item }: ItemModalProps) {
@@ -58,10 +68,12 @@ export function ItemModal({ isOpen, onClose, item }: ItemModalProps) {
                         {/* Hero Image Area */}
                         <div className="relative aspect-video w-full">
                             <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-transparent to-transparent z-10" />
-                            <img
-                                src={item.image}
+                            <Image
+                                src={item.image || '/placeholder.png'}
                                 alt={item.name}
-                                className="h-full w-full object-cover"
+                                fill
+                                className="object-cover"
+                                unoptimized
                             />
 
                             <div className="absolute bottom-8 left-8 z-20 space-y-4">

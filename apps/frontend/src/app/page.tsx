@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/use-dashboard";
 import { Skeleton } from "@/components/ui/skeleton";
+import Image from "next/image";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -43,7 +44,7 @@ export default function LandingPage() {
               className="w-32 h-32 md:w-40 md:h-40 rounded-md overflow-hidden border-2 border-transparent transition-all shadow-2xl relative"
             >
               {isAuthenticated && user?.image ? (
-                <img src={user.image} alt={user.displayName || "User"} className="w-full h-full object-cover" />
+                <Image src={user.image} alt={user.displayName || "User"} fill className="object-cover" unoptimized />
               ) : (
                 <div className="w-full h-full bg-surface flex items-center justify-center text-4xl text-gray-500">?</div>
               )}

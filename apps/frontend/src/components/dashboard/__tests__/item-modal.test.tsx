@@ -2,16 +2,26 @@ import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { ItemModal } from '../item-modal'
 
+interface MockMotionDivProps {
+    children?: React.ReactNode;
+    onClick?: () => void;
+    className?: string;
+}
+
+interface MockAnimatePresenceProps {
+    children?: React.ReactNode;
+}
+
 // Mock framer-motion
 jest.mock('framer-motion', () => ({
     motion: {
-        div: ({ children, onClick, className, ...props }: any) => (
+        div: ({ children, onClick, className }: MockMotionDivProps) => (
             <div onClick={onClick} className={className} data-testid={className?.includes('backdrop') ? 'backdrop' : undefined}>
                 {children}
             </div>
         )
     },
-    AnimatePresence: ({ children }: any) => <>{children}</>
+    AnimatePresence: ({ children }: MockAnimatePresenceProps) => <>{children}</>
 }))
 
 // Mock lucide-react icons

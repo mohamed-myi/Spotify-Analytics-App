@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ContentRow } from "@/components/dashboard/content-row";
+import Image from "next/image";
 
 interface PublicProfile {
     displayName: string;
@@ -11,9 +12,34 @@ interface PublicProfile {
     createdAt: string;
 }
 
+interface TrackData {
+    id: string;
+    name: string;
+    artists: { artist: { name: string } }[];
+    album?: { imageUrl?: string };
+}
+
+interface ArtistData {
+    id: string;
+    name: string;
+    imageUrl?: string;
+}
+
+interface TopDataResponse {
+    tracks: TrackData[];
+    artists: ArtistData[];
+}
+
+interface MappedItem {
+    id: string;
+    name: string;
+    image?: string;
+    artist?: string;
+}
+
 interface TopData {
-    tracks: any[];
-    artists: any[];
+    tracks: MappedItem[];
+    artists: MappedItem[];
 }
 
 export default function PublicProfilePage({ params }: { params: Promise<{ username: string }> }) {
@@ -27,22 +53,19 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userna
         const fetchData = async () => {
             setLoading(true);
             try {
-                // Fetch profile info
                 const userRes = await api.get(`/users/${username}`);
                 setProfile(userRes.data);
 
-                // Fetch top stats
-                const statsRes = await api.get(`/users/${username}/top`);
+                const statsRes = await api.get<TopDataResponse>(`/users/${username}/top`);
 
-                // Map data for display
-                const mappedTracks = statsRes.data.tracks.map((t: any) => ({
+                const mappedTracks = statsRes.data.tracks.map((t) => ({
                     id: t.id,
                     name: t.name,
                     artist: t.artists[0]?.artist.name || "Unknown",
                     image: t.album?.imageUrl,
                 }));
 
-                const mappedArtists = statsRes.data.artists.map((a: any) => ({
+                const mappedArtists = statsRes.data.artists.map((a) => ({
                     id: a.id,
                     name: a.name,
                     image: a.imageUrl,
@@ -50,11 +73,12 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userna
 
                 setTopData({ tracks: mappedTracks, artists: mappedArtists });
 
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error(err);
-                if (err.response?.status === 403) {
+                const axiosError = err as { response?: { status: number } };
+                if (axiosError.response?.status === 403) {
                     setError("This profile is private.");
-                } else if (err.response?.status === 404) {
+                } else if (axiosError.response?.status === 404) {
                     setError("User not found.");
                 } else {
                     setError("Failed to load profile.");
@@ -92,9 +116,9 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userna
             <div className="min-h-screen bg-background container mx-auto px-6 pt-12 pb-20 space-y-12">
                 {/* Header */}
                 <div className="flex flex-col items-center gap-6">
-                    <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-primary/20 bg-gray-800">
+                    <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-primary/20 bg-gray-800 relative">
                         {profile.imageUrl ? (
-                            <img src={profile.imageUrl} alt={profile.displayName} className="w-full h-full object-cover" />
+                            <Image src={profile.imageUrl} alt={profile.displayName} fill className="object-cover" unoptimized />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-4xl text-gray-400 font-bold">
                                 {profile.displayName[0]?.toUpperCase()}

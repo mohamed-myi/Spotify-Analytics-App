@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -89,9 +90,9 @@ export function AppLayout({ children }: AppLayoutProps) {
 
                     {user && (
                         <Link href={`/users/${user.id}`} title="My Profile">
-                            <div className="w-8 h-8 rounded-full bg-surface border border-white/10 flex items-center justify-center overflow-hidden hover:border-primary transition-colors">
+                            <div className="w-8 h-8 rounded-full bg-surface border border-white/10 flex items-center justify-center overflow-hidden hover:border-primary transition-colors relative">
                                 {user.image ? (
-                                    <img src={user.image} alt={user.displayName} className="w-full h-full object-cover" />
+                                    <Image src={user.image} alt={user.displayName} fill className="object-cover" unoptimized />
                                 ) : (
                                     <div className="w-full h-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-xs font-bold text-white">
                                         {user.displayName?.[0]?.toUpperCase() || "U"}

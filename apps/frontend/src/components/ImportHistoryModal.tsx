@@ -43,9 +43,10 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
             setStatus(`Upload complete! Job ID: ${res.data.jobId}`);
             setJobId(res.data.jobId);
             setFile(null); // Clear file
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Upload failed", error);
-            setStatus(`Error: ${error.response?.data?.error || error.message}`);
+            const axiosError = error as { response?: { data?: { error?: string } }; message?: string };
+            setStatus(`Error: ${axiosError.response?.data?.error || axiosError.message || 'Unknown error'}`);
         } finally {
             setUploading(false);
         }

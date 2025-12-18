@@ -5,8 +5,19 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { api } from "@/lib/api";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
+interface ActivityStat {
+    hour?: number;
+    date?: string;
+    playCount: number;
+}
+
+interface ActivityData {
+    hourly: ActivityStat[];
+    daily: ActivityStat[];
+}
+
 export default function ChartsPage() {
-    const [activity, setActivity] = useState<{ hourly: any[], daily: any[] } | null>(null);
+    const [activity, setActivity] = useState<ActivityData | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {

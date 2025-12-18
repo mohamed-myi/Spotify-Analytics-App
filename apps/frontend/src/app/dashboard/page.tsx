@@ -8,16 +8,24 @@ import { ContentRow } from "@/components/dashboard/content-row";
 import { ItemModal } from "@/components/dashboard/item-modal";
 import { useTopArtists, useTopTracks, useRecentHistory } from "@/hooks/use-dashboard";
 
+interface SelectedItem {
+    id: string;
+    name: string;
+    image?: string;
+    artist?: string;
+    spotifyId?: string;
+    artistSpotifyId?: string;
+}
+
 export default function DashboardPage() {
-    const [selectedItem, setSelectedItem] = useState<any>(null);
+    const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
     const [artistRange, setArtistRange] = useState("all");
     const [trackRange, setTrackRange] = useState("4weeks");
 
-    const { artists: topArtists, isLoading: artistsLoading } = useTopArtists(artistRange);
-    const { tracks: topTracks, isLoading: tracksLoading } = useTopTracks(trackRange);
-    const { history: recentHistory, isLoading: historyLoading } = useRecentHistory(20);
+    const { artists: topArtists } = useTopArtists(artistRange);
+    const { tracks: topTracks } = useTopTracks(trackRange);
+    const { history: recentHistory } = useRecentHistory(20);
 
-    const close = () => setSelectedItem(null);
 
     return (
         <AppLayout>
