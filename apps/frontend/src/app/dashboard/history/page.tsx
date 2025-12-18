@@ -67,7 +67,7 @@ export default function HistoryPage() {
     return (
         <AppLayout>
             <div className="min-h-screen bg-background container mx-auto px-6 pt-8 pb-20 space-y-12">
-                <h1 className="text-4xl font-bold tracking-tight text-white mb-8">History</h1>
+                <h1 className="text-4xl font-bold tracking-tight text-primary mb-8">History</h1>
                 {isLoading && <p className="text-white">Loading history...</p>}
                 {isError && <p className="text-red-400">Failed to load history. Please try again later.</p>}
                 {!isLoading && !isError && groupedHistory.length === 0 && <p className="text-white">No history found.</p>}
@@ -75,7 +75,7 @@ export default function HistoryPage() {
                     <div className="space-y-8">
                         {groupedHistory.map((section) => (
                             <section key={section.title} className="space-y-4">
-                                <h2 className="text-2xl font-semibold text-white">{section.title}</h2>
+                                <h2 className="text-2xl font-semibold text-primary">{section.title}</h2>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                     {section.items.map((item) => (
                                         <div
