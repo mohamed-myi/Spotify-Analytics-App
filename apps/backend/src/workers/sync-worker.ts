@@ -3,7 +3,8 @@ import { redis, waitForRateLimit } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { getValidAccessToken, invalidateUserToken } from '../lib/token-manager';
 import { getRecentlyPlayed } from '../lib/spotify-api';
-import { insertListeningEvents } from '../services/ingestion';
+import { insertListeningEventsWithIds } from '../services/ingestion';
+import { updateStatsForEvents } from '../services/aggregation';
 import { parseRecentlyPlayed } from '../lib/spotify-parser';
 import {
     SpotifyUnauthenticatedError,
@@ -22,11 +23,13 @@ const SYNC_COOLDOWN_MS = 5 * 60 * 1000;
 async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
     const { userId } = job.data;
 
-    // Get user and check sync cooldown
+    // Get user with settings for timezone and check sync cooldown
     const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { lastIngestedAt: true },
+        include: { settings: true },
     });
+
+    const userTimezone = user?.settings?.timezone ?? 'UTC';
 
     if (user?.lastIngestedAt) {
         const msSinceLastSync = Date.now() - user.lastIngestedAt.getTime();
@@ -64,12 +67,25 @@ async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
         // Parse Spotify response into our format
         const events = parseRecentlyPlayed(response);
 
-        // Insert into database
-        const summary = await insertListeningEvents(userId, events);
+        // Insert into database and get IDs for aggregation
+        const { summary, results } = await insertListeningEventsWithIds(userId, events);
         await job.log(
             `Inserted ${summary.added}, skipped ${summary.skipped}, ` +
             `updated ${summary.updated}, errors ${summary.errors}`
         );
+
+        // Aggregate stats for newly added events only (idempotency)
+        const addedEvents = results.filter(r => r.status === 'added');
+        if (addedEvents.length > 0) {
+            const aggregationInputs = addedEvents.map(r => ({
+                trackId: r.trackId,
+                artistIds: r.artistIds,
+                playedAt: r.playedAt,
+                msPlayed: r.msPlayed,
+            }));
+            await updateStatsForEvents(userId, aggregationInputs, userTimezone);
+            await job.log(`Aggregated stats for ${addedEvents.length} events`);
+        }
 
         const latestPlay = events[0]?.playedAt;
         if (latestPlay) {

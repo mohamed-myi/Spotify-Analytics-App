@@ -39,3 +39,13 @@ export interface SyncSummary {
     updated: number;
     errors: number;
 }
+
+// Result from inserting a listening event (includes IDs for aggregation)
+export interface InsertResultWithIds {
+    status: 'added' | 'skipped' | 'updated';
+    trackId: string;
+    artistIds: string[];
+    playedAt: Date;
+    msPlayed: number;
+}
+

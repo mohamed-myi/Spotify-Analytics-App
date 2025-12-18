@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { queueArtistForMetadata } from '../lib/redis';
-import type { ParsedListeningEvent, SyncSummary } from '../types/ingestion';
+import type { ParsedListeningEvent, SyncSummary, InsertResultWithIds } from '../types/ingestion';
 
 // Upsert album, returning internal ID
 async function upsertAlbum(
@@ -53,10 +53,10 @@ async function upsertArtist(artist: {
     return created.id;
 }
 
-// Upsert track with album and artist relations
+// Upsert track with album and artist relations, return trackId and artistIds
 async function upsertTrack(
     track: ParsedListeningEvent['track']
-): Promise<string> {
+): Promise<{ trackId: string; artistIds: string[] }> {
     const albumId = await upsertAlbum(track.album);
     const artistIds = await Promise.all(track.artists.map(upsertArtist));
 
@@ -75,7 +75,7 @@ async function upsertTrack(
                 previewUrl: track.previewUrl,
             },
         });
-        return existing.id;
+        return { trackId: existing.id, artistIds };
     }
 
     // Create new track with artist relations
@@ -92,7 +92,7 @@ async function upsertTrack(
         },
         select: { id: true },
     });
-    return created.id;
+    return { trackId: created.id, artistIds };
 }
 
 // Insert listening event (skips duplicates via unique constraint)
@@ -100,7 +100,16 @@ export async function insertListeningEvent(
     userId: string,
     event: ParsedListeningEvent
 ): Promise<'added' | 'skipped' | 'updated'> {
-    const trackId = await upsertTrack(event.track);
+    const result = await insertListeningEventWithIds(userId, event);
+    return result.status;
+}
+
+// Insert listening event and return IDs for aggregation
+export async function insertListeningEventWithIds(
+    userId: string,
+    event: ParsedListeningEvent
+): Promise<InsertResultWithIds> {
+    const { trackId, artistIds } = await upsertTrack(event.track);
 
     // Check if record exists
     const existing = await prisma.listeningEvent.findUnique({
@@ -114,6 +123,8 @@ export async function insertListeningEvent(
         select: { isEstimated: true, source: true },
     });
 
+    const baseResult = { trackId, artistIds, playedAt: event.playedAt, msPlayed: event.msPlayed };
+
     if (!existing) {
         // New record - insert
         await prisma.listeningEvent.create({
@@ -126,13 +137,13 @@ export async function insertListeningEvent(
                 source: event.source,
             },
         });
-        return 'added';
+        return { status: 'added', ...baseResult };
     }
 
     // Record exists
     if (event.source === 'api') {
         // API data never overwrites - skip
-        return 'skipped';
+        return { status: 'skipped', ...baseResult };
     }
 
     // Import source - can claim estimated records
@@ -151,14 +162,14 @@ export async function insertListeningEvent(
                 source: 'import',
             },
         });
-        return 'updated';
+        return { status: 'updated', ...baseResult };
     }
 
     // Already has ground truth - skip
-    return 'skipped';
+    return { status: 'skipped', ...baseResult };
 }
 
-// Batch insert with summary
+// Batch insert with summary (original API)
 export async function insertListeningEvents(
     userId: string,
     events: ParsedListeningEvent[]
@@ -177,3 +188,26 @@ export async function insertListeningEvents(
 
     return summary;
 }
+
+// Batch insert returning results for aggregation
+export async function insertListeningEventsWithIds(
+    userId: string,
+    events: ParsedListeningEvent[]
+): Promise<{ summary: SyncSummary; results: InsertResultWithIds[] }> {
+    const summary: SyncSummary = { added: 0, skipped: 0, updated: 0, errors: 0 };
+    const results: InsertResultWithIds[] = [];
+
+    for (const event of events) {
+        try {
+            const result = await insertListeningEventWithIds(userId, event);
+            summary[result.status]++;
+            results.push(result);
+        } catch (error) {
+            console.error('Failed to insert event:', error);
+            summary.errors++;
+        }
+    }
+
+    return { summary, results };
+}
+

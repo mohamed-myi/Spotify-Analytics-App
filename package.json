@@ -6,6 +6,7 @@
         "packages/*"
     ],
     "scripts": {
+        "postinstall": "prisma generate",
         "dev": "npm run dev --workspaces --if-present",
         "dev:frontend": "npm run dev --workspace=frontend",
         "dev:backend": "npm run dev --workspace=backend",
