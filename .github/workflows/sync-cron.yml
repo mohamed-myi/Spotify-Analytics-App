@@ -1,0 +1,30 @@
+name: Sync Cron Job
+
+on:
+  schedule:
+    # Run every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  trigger-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger sync for all users
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            https://backend-production-c4bf.up.railway.app/cron/seed-sync)
+          
+          if [ "$response" -eq 200 ]; then
+            echo "✅ Sync triggered successfully"
+          else
+            echo "❌ Failed to trigger sync (HTTP $response)"
+            exit 1
+          fi
+      
+      - name: Log result
+        if: success()
+        run: |
+          echo "Sync job completed at $(date -u)"

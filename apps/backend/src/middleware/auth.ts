@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../lib/prisma';
 
 // Routes that don't require session-based authentication
-const PUBLIC_ROUTES = ['/health', '/auth/login', '/auth/callback', '/auth/logout'];
+const PUBLIC_ROUTES = ['/health', '/health/detailed', '/auth/login', '/auth/callback', '/auth/logout'];
 
 const COOKIE_OPTIONS = {
     httpOnly: true,
