@@ -1,10 +1,17 @@
 // Mock dependencies before imports
 process.env.REDIS_URL = 'redis://mock:6379';
+process.env.DATABASE_URL = 'postgresql://mock:5432/db';
 
 jest.mock('@/lib/redis', () => ({
     redis: {
         get: jest.fn(),
         set: jest.fn(),
+    },
+}));
+
+jest.mock('@/lib/prisma', () => ({
+    prisma: {
+        importJob: { findUnique: jest.fn(), create: jest.fn() },
     },
 }));
 

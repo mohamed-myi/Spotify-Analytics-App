@@ -6,7 +6,7 @@ import {
     isAudioFeaturesWorkerRunning,
     isMetadataWorkerRunning,
     isTopStatsWorkerRunning,
-} from '../workers/worker-status';
+} from '@/workers/worker-status';
 
 type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
 type CheckStatus = 'up' | 'down';

@@ -136,7 +136,7 @@ export async function statsRoutes(fastify: FastifyInstance) {
             },
         });
 
-        const data = topTracks.map(t => ({
+        const data = topTracks.map((t: any) => ({
             ...t.track,
             rank: t.rank,
         }));
