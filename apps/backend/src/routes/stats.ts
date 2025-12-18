@@ -433,18 +433,34 @@ export async function statsRoutes(fastify: FastifyInstance) {
                             items: {
                                 type: 'object',
                                 properties: {
+                                    id: { type: 'string' },
                                     playedAt: { type: 'string', format: 'date-time' },
                                     track: {
                                         type: 'object',
                                         properties: {
+                                            spotifyId: { type: 'string' },
                                             name: { type: 'string' },
                                             artists: {
                                                 type: 'array',
                                                 items: {
                                                     type: 'object',
                                                     properties: {
-                                                        name: { type: 'string' }
+                                                        artist: {
+                                                            type: 'object',
+                                                            properties: {
+                                                                name: { type: 'string' },
+                                                                spotifyId: { type: 'string' }
+                                                            }
+                                                        }
                                                     }
+                                                }
+                                            },
+                                            album: {
+                                                type: 'object',
+                                                nullable: true,
+                                                properties: {
+                                                    name: { type: 'string' },
+                                                    imageUrl: { type: 'string', nullable: true }
                                                 }
                                             }
                                         }
