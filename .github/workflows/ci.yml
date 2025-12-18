@@ -43,4 +43,5 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          DATABASE_URL: postgres://dummy:dummy@localhost:5432/dummy
         run: npm run test:integration --workspace=backend -- --testPathIgnorePatterns=ingestion
