@@ -13,7 +13,7 @@ export function MoodChart() {
 
     const chartData = useMemo(() => {
         if (!data) return [];
-        return data.map((d: any) => ({
+        return data.map((d: { date: string; valence: number; energy: number }) => ({
             date: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
             valence: Math.round(d.valence * 100), // Scale to 0-100
             energy: Math.round(d.energy * 100),
@@ -31,7 +31,7 @@ export function MoodChart() {
                             Mood Model
                         </CardTitle>
                         <CardDescription className="text-zinc-400">
-                            Your music's emotional timeline over the last 30 days.
+                            Your music&apos;s emotional timeline over the last 30 days.
                         </CardDescription>
                     </div>
                 </div>

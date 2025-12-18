@@ -16,7 +16,7 @@ export function DailyDoseChart() {
         // Transform userHourStats to 24-hour clock format
         // Ensure all 24 hours are represented
         const fullDay = Array.from({ length: 24 }, (_, i) => {
-            const hourStat = data.hourly.find((h: any) => h.hour === i);
+            const hourStat = data.hourly.find((h: { hour: number; playCount: number }) => h.hour === i);
             return {
                 hour: i,
                 label: i === 0 ? '12 AM' : i === 12 ? '12 PM' : i > 12 ? `${i - 12} PM` : `${i} AM`,

@@ -4,6 +4,7 @@ import useSWR from 'swr';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { Clock } from 'lucide-react';
+import Image from 'next/image';
 
 const fetcher = (url: string) => api.get(url).then((res) => res.data);
 
@@ -34,17 +35,19 @@ export function OnRepeatList() {
             </CardHeader>
             <CardContent>
                 <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                    {tracks?.slice(0, 50).map((track: any, i: number) => (
+                    {tracks?.slice(0, 50).map((track: { id: string; name: string; artists: { name: string }[]; album: { name: string; imageUrl: string }; totalMs: string; playCount: number }, i: number) => (
                         <div key={track.id} className="flex items-center gap-3 group">
                             <span className="text-2xl font-bold text-zinc-700 w-8 text-center group-hover:text-orange-500 transition-colors">
                                 {i + 1}
                             </span>
                             <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-md">
                                 {track.album?.imageUrl && (
-                                    <img
+                                    <Image
                                         src={track.album.imageUrl}
                                         alt={track.album.name}
-                                        className="h-full w-full object-cover"
+                                        fill
+                                        sizes="48px"
+                                        className="object-cover"
                                     />
                                 )}
                             </div>
@@ -53,7 +56,7 @@ export function OnRepeatList() {
                                     {track.name}
                                 </p>
                                 <p className="text-sm text-zinc-500 truncate">
-                                    {track.artists?.map((a: any) => a.name).join(', ')}
+                                    {track.artists?.map((a: { name: string }) => a.name).join(', ')}
                                 </p>
                             </div>
                             <div className="text-right">
