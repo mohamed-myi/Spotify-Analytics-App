@@ -9,6 +9,7 @@ import { authRoutes } from './routes/auth';
 import { cronRoutes } from './routes/cron';
 import { importRoutes } from './routes/import';
 import { statsRoutes } from './routes/stats';
+import { settingsRoutes } from './routes/settings';
 import { userRoutes } from './routes/users';
 import { compareRoutes } from './routes/compare';
 import { healthRoutes } from './routes/health';
@@ -74,6 +75,7 @@ export const build = async () => {
   await server.register(cronRoutes);
   await server.register(importRoutes);
   await server.register(statsRoutes);
+  await server.register(settingsRoutes);
   await server.register(userRoutes);
   await server.register(compareRoutes);
   await server.register(healthRoutes);

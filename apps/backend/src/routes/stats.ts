@@ -32,6 +32,61 @@ const historySchema = {
 
 export async function statsRoutes(fastify: FastifyInstance) {
 
+    // GET /me/stats/summary - Profile stats summary
+    fastify.get('/me/stats/summary', {
+        schema: {
+            description: 'Get summary statistics for user profile',
+            tags: ['Stats'],
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        totalPlays: { type: 'number' },
+                        totalListeningMs: { type: 'string' },
+                        uniqueTracks: { type: 'number' },
+                        uniqueArtists: { type: 'number' },
+                        memberSince: { type: 'string', format: 'date-time' }
+                    }
+                },
+                401: { type: 'object', properties: { error: { type: 'string' } } }
+            }
+        }
+    }, async (request, reply) => {
+        const userId = request.userId;
+        if (!userId) return reply.status(401).send({ error: 'Unauthorized' });
+
+        const cacheKey = `stats:summary:${userId}`;
+        const response = await getOrSet(cacheKey, CACHE_TTL, async () => {
+            const [user, trackStats, artistCount, listeningEvents] = await Promise.all([
+                prisma.user.findUnique({
+                    where: { id: userId },
+                    select: { createdAt: true }
+                }),
+                prisma.userTrackStats.aggregate({
+                    where: { userId },
+                    _sum: { playCount: true, totalMs: true },
+                    _count: { trackId: true }
+                }),
+                prisma.userArtistStats.count({
+                    where: { userId }
+                }),
+                prisma.listeningEvent.count({
+                    where: { userId }
+                })
+            ]);
+
+            return toJSON({
+                totalPlays: listeningEvents,
+                totalListeningMs: trackStats._sum.totalMs || 0n,
+                uniqueTracks: trackStats._count.trackId || 0,
+                uniqueArtists: artistCount,
+                memberSince: user?.createdAt
+            });
+        });
+
+        return response;
+    });
+
     // GET /me/stats/overview
     fastify.get('/me/stats/overview', {
         schema: {

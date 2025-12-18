@@ -72,6 +72,12 @@ export function AppLayout({ children }: AppLayoutProps) {
                     >
                         Stats
                     </Link>
+                    <Link
+                        href="/dashboard/profile"
+                        className={cn("hover:text-white transition-colors", pathname === "/dashboard/profile" && "text-white")}
+                    >
+                        Profile
+                    </Link>
                     <button
                         onClick={handleLogout}
                         className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
