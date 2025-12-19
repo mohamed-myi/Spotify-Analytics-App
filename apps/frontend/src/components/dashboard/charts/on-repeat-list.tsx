@@ -30,7 +30,7 @@ export function OnRepeatList() {
                     On Repeat (Real Deal)
                 </CardTitle>
                 <CardDescription className="text-zinc-400">
-                    Your true obsessions by total time listened.
+                    Your favorites tracks by total time listened. Tracking begins upon first login, if you want full history please import your spotify data.
                 </CardDescription>
             </CardHeader>
             <CardContent>

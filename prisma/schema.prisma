@@ -33,13 +33,16 @@ model User {
 }
 
 model SpotifyAuth {
-  userId          String   @id @map("user_id")
-  refreshToken    String   @map("refresh_token")
-  scopes          String
-  lastRefreshAt   DateTime @default(now()) @map("last_refresh_at")
-  isValid         Boolean  @default(true) @map("is_valid")
+  userId              String    @id @map("user_id")
+  refreshToken        String    @map("refresh_token")
+  scopes              String
+  lastRefreshAt       DateTime  @default(now()) @map("last_refresh_at")
+  isValid             Boolean   @default(true) @map("is_valid")
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  lastFailureAt       DateTime? @map("last_failure_at")
+  lastFailureReason   String?   @map("last_failure_reason")
 
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("spotify_auth")
 }

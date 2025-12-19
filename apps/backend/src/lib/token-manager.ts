@@ -6,6 +6,9 @@ import { logger } from './logger';
 // Access tokens expire in 1 hour; refresh proactively at 50 minutes
 const REFRESH_THRESHOLD_MS = 50 * 60 * 1000;
 
+// Number of consecutive failures before invalidating token
+const MAX_CONSECUTIVE_FAILURES = 3;
+
 export interface TokenResult {
     accessToken: string;
     expiresIn: number;
@@ -61,6 +64,7 @@ export async function refreshUserToken(userId: string): Promise<TokenResult | nu
                 refreshToken: encryptedNewToken,
                 lastRefreshAt: new Date(),
                 isValid: true,
+                consecutiveFailures: 0, // Reset on successful refresh
             },
         });
 
@@ -70,8 +74,8 @@ export async function refreshUserToken(userId: string): Promise<TokenResult | nu
         };
     } catch (error) {
         if (error instanceof TokenRefreshError && error.isRevoked) {
-            // Token was revoked by user
-            await invalidateUserToken(userId);
+            // Token was revoked by user - immediate invalidation
+            await invalidateUserToken(userId, 'token_revoked_by_user');
             logger.warn({ userId }, 'Token revoked by user');
             return null;
         }
@@ -82,10 +86,47 @@ export async function refreshUserToken(userId: string): Promise<TokenResult | nu
     }
 }
 
-// Marks a user's token as invalid 
-export async function invalidateUserToken(userId: string): Promise<void> {
+// Records a token failure and returns true if token was invalidated
+export async function recordTokenFailure(userId: string, reason: string): Promise<boolean> {
+    const auth = await prisma.spotifyAuth.update({
+        where: { userId },
+        data: {
+            consecutiveFailures: { increment: 1 },
+            lastFailureAt: new Date(),
+            lastFailureReason: reason,
+        },
+    });
+
+    logger.warn(
+        { userId, consecutiveFailures: auth.consecutiveFailures, reason },
+        'Token failure recorded'
+    );
+
+    // Only invalidate after threshold reached
+    if (auth.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        await invalidateUserToken(userId, `max_failures_reached:${reason}`);
+        return true;
+    }
+    return false;
+}
+
+// Resets failure count after successful API call
+export async function resetTokenFailures(userId: string): Promise<void> {
     await prisma.spotifyAuth.update({
         where: { userId },
-        data: { isValid: false },
+        data: { consecutiveFailures: 0 },
     });
 }
+
+// Marks a user's token as invalid 
+export async function invalidateUserToken(userId: string, reason?: string): Promise<void> {
+    await prisma.spotifyAuth.update({
+        where: { userId },
+        data: {
+            isValid: false,
+            lastFailureReason: reason || 'unknown',
+        },
+    });
+    logger.error({ userId, reason }, 'Token invalidated');
+}
+

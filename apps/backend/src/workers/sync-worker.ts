@@ -1,7 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import { redis, waitForRateLimit } from '../lib/redis';
 import { prisma } from '../lib/prisma';
-import { getValidAccessToken, invalidateUserToken } from '../lib/token-manager';
+import { getValidAccessToken, recordTokenFailure, resetTokenFailures } from '../lib/token-manager';
 import { getRecentlyPlayed } from '../lib/spotify-api';
 import { insertListeningEventsWithIds } from '../services/ingestion';
 import { updateStatsForEvents } from '../services/aggregation';
@@ -44,7 +44,7 @@ async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
 
     const tokenResult = await getValidAccessToken(userId);
     if (!tokenResult) {
-        await invalidateUserToken(userId);
+        // Token already invalid or refresh failed - don't double-invalidate
         throw new Error(`No valid token for user ${userId}`);
     }
 
@@ -62,6 +62,8 @@ async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
 
         if (response.items.length === 0) {
             await job.log('No new plays found');
+            // Reset failures on any successful API call
+            await resetTokenFailures(userId);
             return { added: 0, skipped: 0, updated: 0, errors: 0 };
         }
 
@@ -93,15 +95,27 @@ async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
             });
         }
 
+        // Reset failure count on successful sync
+        await resetTokenFailures(userId);
+
         return summary;
     } catch (error) {
         if (error instanceof SpotifyUnauthenticatedError) {
-            await invalidateUserToken(userId);
-            throw new Error(`Token revoked for user ${userId}`);
+            // Record failure instead of immediate invalidation
+            const invalidated = await recordTokenFailure(userId, 'spotify_401_unauthenticated');
+            if (invalidated) {
+                throw new Error(`Token invalidated for user ${userId} after repeated 401 errors`);
+            }
+            // Will retry via BullMQ
+            throw error;
         }
         if (error instanceof SpotifyForbiddenError) {
-            await invalidateUserToken(userId);
-            throw new Error(`Access forbidden for user ${userId}`);
+            // Record failure instead of immediate invalidation
+            const invalidated = await recordTokenFailure(userId, 'spotify_403_forbidden');
+            if (invalidated) {
+                throw new Error(`Token invalidated for user ${userId} after repeated 403 errors`);
+            }
+            throw error;
         }
         if (error instanceof SpotifyRateLimitError) {
             await job.log(`Rate limited, retry after ${error.retryAfterSeconds}s`);

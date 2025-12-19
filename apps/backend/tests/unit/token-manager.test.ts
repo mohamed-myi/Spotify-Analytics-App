@@ -30,6 +30,8 @@ import {
     getValidAccessToken,
     refreshUserToken,
     invalidateUserToken,
+    recordTokenFailure,
+    resetTokenFailures,
 } from '../../src/lib/token-manager';
 import { prisma } from '../../src/lib/prisma';
 import { refreshAccessToken, TokenRefreshError } from '../../src/lib/spotify';
@@ -139,6 +141,7 @@ describe('token-manager', () => {
                 expect.objectContaining({
                     data: expect.objectContaining({
                         refreshToken: 'encrypted_brand_new_refresh_token',
+                        consecutiveFailures: 0,
                     }),
                 })
             );
@@ -179,7 +182,7 @@ describe('token-manager', () => {
             expect(result).toBeNull();
             expect(prisma.spotifyAuth.update).toHaveBeenCalledWith({
                 where: { userId: 'user-123' },
-                data: { isValid: false },
+                data: { isValid: false, lastFailureReason: 'token_revoked_by_user' },
             });
         });
 
@@ -199,13 +202,66 @@ describe('token-manager', () => {
     });
 
     describe('invalidateUserToken', () => {
-        test('sets isValid to false', async () => {
+        test('sets isValid to false with reason', async () => {
+            await invalidateUserToken('user-123', 'test_reason');
+
+            expect(prisma.spotifyAuth.update).toHaveBeenCalledWith({
+                where: { userId: 'user-123' },
+                data: { isValid: false, lastFailureReason: 'test_reason' },
+            });
+        });
+
+        test('uses unknown as default reason', async () => {
             await invalidateUserToken('user-123');
 
             expect(prisma.spotifyAuth.update).toHaveBeenCalledWith({
                 where: { userId: 'user-123' },
-                data: { isValid: false },
+                data: { isValid: false, lastFailureReason: 'unknown' },
+            });
+        });
+    });
+
+    describe('recordTokenFailure', () => {
+        test('increments failure count and returns false when under threshold', async () => {
+            (prisma.spotifyAuth.update as jest.Mock).mockResolvedValue({
+                consecutiveFailures: 1,
+            });
+
+            const result = await recordTokenFailure('user-123', 'test_failure');
+
+            expect(result).toBe(false);
+            expect(prisma.spotifyAuth.update).toHaveBeenCalledWith({
+                where: { userId: 'user-123' },
+                data: {
+                    consecutiveFailures: { increment: 1 },
+                    lastFailureAt: expect.any(Date),
+                    lastFailureReason: 'test_failure',
+                },
+            });
+        });
+
+        test('invalidates and returns true when threshold reached', async () => {
+            (prisma.spotifyAuth.update as jest.Mock).mockResolvedValue({
+                consecutiveFailures: 3,
+            });
+
+            const result = await recordTokenFailure('user-123', 'test_failure');
+
+            expect(result).toBe(true);
+            // Should have called update twice - once for failure record, once for invalidation
+            expect(prisma.spotifyAuth.update).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    describe('resetTokenFailures', () => {
+        test('resets consecutiveFailures to 0', async () => {
+            await resetTokenFailures('user-123');
+
+            expect(prisma.spotifyAuth.update).toHaveBeenCalledWith({
+                where: { userId: 'user-123' },
+                data: { consecutiveFailures: 0 },
             });
         });
     });
 });
+
