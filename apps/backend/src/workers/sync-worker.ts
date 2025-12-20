@@ -12,6 +12,7 @@ import {
     SpotifyRateLimitError,
 } from '../lib/spotify-errors';
 import type { SyncSummary } from '../types/ingestion';
+import { createSyncContext } from '../types/ingestion';
 import { workerLoggers } from '../lib/logger';
 import { setSyncWorkerRunning } from './worker-status';
 import { DEFAULT_JOB_OPTIONS } from './worker-config';
@@ -44,7 +45,7 @@ async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
 
     const tokenResult = await getValidAccessToken(userId);
     if (!tokenResult) {
-        // Token already invalid or refresh failed - don't double-invalidate
+        // Token already invalid or refresh failed
         throw new Error(`No valid token for user ${userId}`);
     }
 
@@ -69,7 +70,9 @@ async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
 
         const events = parseRecentlyPlayed(response);
 
-        const { summary, results } = await insertListeningEventsWithIds(userId, events);
+        // Create per-job cache context to reduce duplicate DB lookups
+        const ctx = createSyncContext();
+        const { summary, results } = await insertListeningEventsWithIds(userId, events, ctx);
         await job.log(
             `Inserted ${summary.added}, skipped ${summary.skipped}, ` +
             `updated ${summary.updated}, errors ${summary.errors}`

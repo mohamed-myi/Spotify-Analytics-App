@@ -1,10 +1,16 @@
 import { prisma } from '../lib/prisma';
 import { queueArtistForMetadata, queueTrackForFeatures } from '../lib/redis';
-import type { ParsedListeningEvent, SyncSummary, InsertResultWithIds } from '../types/ingestion';
+import type { ParsedListeningEvent, SyncSummary, InsertResultWithIds, SyncContext } from '../types/ingestion';
 
 export async function upsertAlbum(
-    album: ParsedListeningEvent['track']['album']
+    album: ParsedListeningEvent['track']['album'],
+    ctx?: SyncContext
 ): Promise<string> {
+    // Check cache first
+    if (ctx?.albumCache.has(album.spotifyId)) {
+        return ctx.albumCache.get(album.spotifyId)!;
+    }
+
     const result = await prisma.album.upsert({
         where: { spotifyId: album.spotifyId },
         create: {
@@ -19,13 +25,21 @@ export async function upsertAlbum(
         },
         select: { id: true },
     });
+
+    // Store in cache
+    ctx?.albumCache.set(album.spotifyId, result.id);
     return result.id;
 }
 
-export async function upsertArtist(artist: {
-    spotifyId: string;
-    name: string;
-}): Promise<string> {
+export async function upsertArtist(
+    artist: { spotifyId: string; name: string },
+    ctx?: SyncContext
+): Promise<string> {
+    // Check cache first
+    if (ctx?.artistCache.has(artist.spotifyId)) {
+        return ctx.artistCache.get(artist.spotifyId)!;
+    }
+
     const existing = await prisma.artist.findUnique({
         where: { spotifyId: artist.spotifyId },
         select: { id: true, imageUrl: true },
@@ -36,6 +50,8 @@ export async function upsertArtist(artist: {
         if (!existing.imageUrl) {
             await queueArtistForMetadata(artist.spotifyId);
         }
+        // Store in cache
+        ctx?.artistCache.set(artist.spotifyId, existing.id);
         return existing.id;
     }
 
@@ -47,14 +63,29 @@ export async function upsertArtist(artist: {
         select: { id: true },
     });
     await queueArtistForMetadata(artist.spotifyId);
+
+    // Store in cache
+    ctx?.artistCache.set(artist.spotifyId, created.id);
     return created.id;
 }
 
 export async function upsertTrack(
-    track: ParsedListeningEvent['track']
+    track: ParsedListeningEvent['track'],
+    ctx?: SyncContext
 ): Promise<{ trackId: string; artistIds: string[] }> {
-    const albumId = await upsertAlbum(track.album);
-    const artistIds = await Promise.all(track.artists.map(upsertArtist));
+    // Check cache first for track
+    if (ctx?.trackCache.has(track.spotifyId)) {
+        // Still need artist IDs, but they should also be cached now
+        const artistIds = await Promise.all(
+            track.artists.map((a) => upsertArtist(a, ctx))
+        );
+        return { trackId: ctx.trackCache.get(track.spotifyId)!, artistIds };
+    }
+
+    const albumId = await upsertAlbum(track.album, ctx);
+    const artistIds = await Promise.all(
+        track.artists.map((a) => upsertArtist(a, ctx))
+    );
 
     const existing = await prisma.track.findUnique({
         where: { spotifyId: track.spotifyId },
@@ -69,6 +100,8 @@ export async function upsertTrack(
                 previewUrl: track.previewUrl,
             },
         });
+        // Store in cache
+        ctx?.trackCache.set(track.spotifyId, existing.id);
         return { trackId: existing.id, artistIds };
     }
 
@@ -89,22 +122,26 @@ export async function upsertTrack(
     // Queue for audio features
     await queueTrackForFeatures(created.spotifyId);
 
+    // Store in cache
+    ctx?.trackCache.set(track.spotifyId, created.id);
     return { trackId: created.id, artistIds };
 }
 
 export async function insertListeningEvent(
     userId: string,
-    event: ParsedListeningEvent
+    event: ParsedListeningEvent,
+    ctx?: SyncContext
 ): Promise<'added' | 'skipped' | 'updated'> {
-    const result = await insertListeningEventWithIds(userId, event);
+    const result = await insertListeningEventWithIds(userId, event, ctx);
     return result.status;
 }
 
 export async function insertListeningEventWithIds(
     userId: string,
-    event: ParsedListeningEvent
+    event: ParsedListeningEvent,
+    ctx?: SyncContext
 ): Promise<InsertResultWithIds> {
-    const { trackId, artistIds } = await upsertTrack(event.track);
+    const { trackId, artistIds } = await upsertTrack(event.track, ctx);
 
     const existing = await prisma.listeningEvent.findUnique({
         where: {
@@ -160,13 +197,14 @@ export async function insertListeningEventWithIds(
 
 export async function insertListeningEvents(
     userId: string,
-    events: ParsedListeningEvent[]
+    events: ParsedListeningEvent[],
+    ctx?: SyncContext
 ): Promise<SyncSummary> {
     const summary: SyncSummary = { added: 0, skipped: 0, updated: 0, errors: 0 };
 
     for (const event of events) {
         try {
-            const result = await insertListeningEvent(userId, event);
+            const result = await insertListeningEvent(userId, event, ctx);
             summary[result]++;
         } catch (error) {
             console.error('Failed to insert event:', error);
@@ -179,14 +217,15 @@ export async function insertListeningEvents(
 
 export async function insertListeningEventsWithIds(
     userId: string,
-    events: ParsedListeningEvent[]
+    events: ParsedListeningEvent[],
+    ctx?: SyncContext
 ): Promise<{ summary: SyncSummary; results: InsertResultWithIds[] }> {
     const summary: SyncSummary = { added: 0, skipped: 0, updated: 0, errors: 0 };
     const results: InsertResultWithIds[] = [];
 
     for (const event of events) {
         try {
-            const result = await insertListeningEventWithIds(userId, event);
+            const result = await insertListeningEventWithIds(userId, event, ctx);
             summary[result.status]++;
             results.push(result);
         } catch (error) {

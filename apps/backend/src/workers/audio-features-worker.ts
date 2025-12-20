@@ -1,4 +1,4 @@
-import { queueTrackForFeatures, popTracksForFeatures, waitForRateLimit, checkRateLimit } from '../lib/redis';
+import { queueTrackForFeatures, popTracksForFeatures, waitForRateLimit, checkRateLimit, tryLockMetadata } from '../lib/redis';
 import { getValidAccessToken } from '../lib/token-manager';
 import { getAudioFeaturesBatch } from '../lib/spotify-api';
 import { prisma } from '../lib/prisma';
@@ -25,6 +25,19 @@ export async function audioFeaturesWorker() {
                 continue;
             }
 
+            // Filter to only tracks that haven't been processed recently
+            const toProcess: string[] = [];
+            for (const id of trackIds) {
+                if (await tryLockMetadata('features', id)) {
+                    toProcess.push(id);
+                }
+            }
+
+            if (toProcess.length === 0) {
+                log.info({ skipped: trackIds.length }, 'All tracks already processed recently');
+                continue;
+            }
+
             // Get a valid token
             const user = await prisma.spotifyAuth.findFirst({
                 where: { isValid: true },
@@ -34,8 +47,8 @@ export async function audioFeaturesWorker() {
 
             if (!user) {
                 log.warn('No valid user tokens found for audio features worker. Retrying...');
-                // Push back to queue? Ideally yes. For now just sleep.
-                for (const id of trackIds) {
+                // Re-queue locked tracks
+                for (const id of toProcess) {
                     await queueTrackForFeatures(id);
                 }
                 await new Promise((resolve) => setTimeout(resolve, 10000));
@@ -51,9 +64,9 @@ export async function audioFeaturesWorker() {
             }
 
             const accessToken = tokenResult.accessToken;
-            const features = await getAudioFeaturesBatch(accessToken, trackIds);
+            const features = await getAudioFeaturesBatch(accessToken, toProcess);
 
-            // Bulk insert/upsert
+            // Bulk insert
             await prisma.$transaction(
                 features
                     .filter((f) => f !== null)

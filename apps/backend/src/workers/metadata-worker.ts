@@ -1,4 +1,4 @@
-import { popArtistsForMetadata, popTracksForMetadata, queueArtistForMetadata, waitForRateLimit } from '../lib/redis';
+import { popArtistsForMetadata, popTracksForMetadata, queueArtistForMetadata, waitForRateLimit, tryLockMetadata } from '../lib/redis';
 import { getValidAccessToken } from '../lib/token-manager';
 import { getArtistsBatch, getTracksBatch } from '../lib/spotify-api';
 import { prisma } from '../lib/prisma';
@@ -12,8 +12,21 @@ async function processArtists(accessToken: string): Promise<number> {
     const artistIds = await popArtistsForMetadata(50);
     if (artistIds.length === 0) return 0;
 
+    // Filter to only artists that haven't been processed recently
+    const toProcess: string[] = [];
+    for (const id of artistIds) {
+        if (await tryLockMetadata('artist', id)) {
+            toProcess.push(id);
+        }
+    }
+
+    if (toProcess.length === 0) {
+        log.info({ skipped: artistIds.length }, 'All artists already processed recently');
+        return 0;
+    }
+
     try {
-        const artists = await getArtistsBatch(accessToken, artistIds);
+        const artists = await getArtistsBatch(accessToken, toProcess);
 
         await prisma.$transaction(
             artists.map((artist) =>
@@ -27,11 +40,11 @@ async function processArtists(accessToken: string): Promise<number> {
             )
         );
 
-        log.info({ count: artists.length }, 'Updated metadata for artists');
+        log.info({ count: artists.length, skipped: artistIds.length - toProcess.length }, 'Updated metadata for artists');
         return artists.length;
     } catch (error) {
-        // Re-queue failed artists for retry
-        for (const id of artistIds) {
+        // Re-queue failed artists for retry, lock expires in 24h
+        for (const id of toProcess) {
             await queueArtistForMetadata(id);
         }
         throw error;
@@ -89,7 +102,7 @@ async function processTracks(accessToken: string): Promise<number> {
                 });
                 artistIds.push(artist.id);
 
-                // Queue artist for full metadata (images, genres)
+                // Queue artist for full metadata
                 await queueArtistForMetadata(spotifyArtist.id);
             }
 

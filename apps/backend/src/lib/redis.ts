@@ -139,6 +139,18 @@ export async function getOrSet<T>(
     return data;
 }
 
+// Metadata cooldown 24hr lock prevents repeated API calls for same entity
+const METADATA_LOCK_TTL = 86400;
+
+export async function tryLockMetadata(
+    type: 'artist' | 'track' | 'features',
+    spotifyId: string
+): Promise<boolean> {
+    const key = `metadata_lock:${type}:${spotifyId}`;
+    const result = await redis.set(key, '1', 'EX', METADATA_LOCK_TTL, 'NX');
+    return result === 'OK';
+}
+
 // Close Redis connection
 export async function closeRedis(): Promise<void> {
     await redis.quit();

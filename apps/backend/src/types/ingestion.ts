@@ -21,7 +21,7 @@ export interface ParsedListeningEvent {
         artists: Array<{
             spotifyId: string;
             name: string;
-            // imageUrl and genres are NOT included (queued for backfill)
+            // imageUrl and genres are not included; queued for backfill
         }>;
     };
 }
@@ -47,5 +47,20 @@ export interface InsertResultWithIds {
     artistIds: string[];
     playedAt: Date;
     msPlayed: number;
+}
+
+// Per job caching context to reduce duplicate DB lookups
+export interface SyncContext {
+    albumCache: Map<string, string>;   // spotifyId → internal id
+    artistCache: Map<string, string>;  // spotifyId → internal id
+    trackCache: Map<string, string>;   // spotifyId → internal id
+}
+
+export function createSyncContext(): SyncContext {
+    return {
+        albumCache: new Map(),
+        artistCache: new Map(),
+        trackCache: new Map(),
+    };
 }
 
