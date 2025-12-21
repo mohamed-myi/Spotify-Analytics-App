@@ -15,8 +15,8 @@ export default function LandingPage() {
     if (isAuthenticated) {
       router.push("/dashboard");
     } else {
-      // Redirect to backend login
-      window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001'}/auth/login`;
+      // Redirect to login through proxy (ensures same-origin cookies)
+      window.location.href = "/api/auth/login";
     }
   };
 

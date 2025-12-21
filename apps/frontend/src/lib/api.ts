@@ -1,10 +1,9 @@
 import axios from "axios";
 
-// Environment variable for API URL, defaulting to local backend
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:3001";
-
+// API requests now go through Next.js rewrites (/api/* -> backend)
+// This ensures same-origin for cookies, fixing mobile browser issues
 export const api = axios.create({
-    baseURL: API_URL,
+    baseURL: "/api",
     withCredentials: true, // Send cookies with requests
     headers: {
         "Content-Type": "application/json",
@@ -12,3 +11,4 @@ export const api = axios.create({
 });
 
 export const fetcher = (url: string) => api.get(url).then((res) => res.data);
+

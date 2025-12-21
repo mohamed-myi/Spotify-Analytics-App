@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001'
+// API requests go through Next.js proxy at /api/*
+const API_URL = '/api'
 
 // Default mock data
 export const mockUser = {

@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+// Backend URL for API proxy (Railway in production, local in dev)
+const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:3001";
+
 const nextConfig: NextConfig = {
     images: {
         remotePatterns: [
@@ -8,6 +11,15 @@ const nextConfig: NextConfig = {
             { protocol: 'https', hostname: 'wrapped-images.spotifycdn.com' },
             { protocol: 'https', hostname: 'platform-lookaside.fbsbx.com' }, // Sometimes used for generic avatars
         ],
+    },
+    // Proxy API requests through Next.js to avoid cross-origin cookie issues on mobile
+    async rewrites() {
+        return [
+            {
+                source: '/api/:path*',
+                destination: `${BACKEND_URL}/:path*`,
+            },
+        ];
     },
 };
 
