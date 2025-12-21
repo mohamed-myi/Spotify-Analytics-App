@@ -32,6 +32,12 @@ const historySchema = {
     }
 };
 
+const TERM_MAP: Record<string, string> = {
+    '4weeks': 'short_term',
+    '6months': 'medium_term',
+    'year': 'long_term',
+};
+
 export async function statsRoutes(fastify: FastifyInstance) {
 
     // GET /me/stats/summary: Profile stats summary
@@ -197,7 +203,7 @@ export async function statsRoutes(fastify: FastifyInstance) {
                 prisma.userTimeBucketStats.findMany({
                     where: { userId, bucketType: 'DAY' },
                     orderBy: { bucketDate: 'desc' },
-                    take: 30, // Last 30 days
+                    take: 30,
                 }),
             ]);
 
@@ -236,7 +242,13 @@ export async function statsRoutes(fastify: FastifyInstance) {
                                 items: {
                                     type: 'object',
                                     properties: {
-                                        name: { type: 'string' }
+                                        artist: {
+                                            type: 'object',
+                                            properties: {
+                                                name: { type: 'string' },
+                                                spotifyId: { type: 'string' }
+                                            }
+                                        }
                                     }
                                 }
                             },
@@ -266,13 +278,7 @@ export async function statsRoutes(fastify: FastifyInstance) {
         const range = request.query.range || '4weeks';
         const sortBy = request.query.sortBy || 'rank';
 
-        // Map frontend ranges to Spotify's time_range terms
-        const termMap: Record<string, string> = {
-            '4weeks': 'short_term',
-            '6months': 'medium_term',
-            'year': 'long_term',
-        };
-        const term = termMap[range];
+        const term = TERM_MAP[range];
         const isAllTime = range === 'alltime';
 
         const cacheKey = `stats:tracks:${userId}:${range}:${sortBy}`;
@@ -304,7 +310,6 @@ export async function statsRoutes(fastify: FastifyInstance) {
                 return toJSON(data);
 
             } else {
-                // Spotify API ranges: query SpotifyTopTrack
                 const topTracks = await prisma.spotifyTopTrack.findMany({
                     where: { userId, term },
                     orderBy: { rank: 'asc' },
@@ -331,7 +336,6 @@ export async function statsRoutes(fastify: FastifyInstance) {
     });
 
     // GET /me/stats/top/artists
-    // Uses Spotify's personalized Top Artists
     fastify.get<{ Querystring: { range?: string } }>('/me/stats/top/artists', {
         schema: {
             ...rangeSchema,
@@ -358,18 +362,12 @@ export async function statsRoutes(fastify: FastifyInstance) {
         const userId = request.userId;
         if (!userId) return reply.status(401).send({ error: 'Unauthorized' });
 
-        // Lazy trigger: queue background refresh if stale (non-blocking)
         await triggerLazyRefreshIfStale(userId);
 
         const range = request.query.range || '4weeks';
 
         // Map frontend ranges to Spotify's time_range terms
-        const termMap: Record<string, string> = {
-            '4weeks': 'short_term',
-            '6months': 'medium_term',
-            'year': 'long_term',
-        };
-        const term = termMap[range];
+        const term = TERM_MAP[range];
         const isAllTime = range === 'alltime';
 
         const cacheKey = `stats:artists:${userId}:${range}`;

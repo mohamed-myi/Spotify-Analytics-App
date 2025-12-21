@@ -106,6 +106,24 @@ export async function upsertTrack(
                 previewUrl: track.previewUrl,
             },
         });
+
+        // Ensure TrackArtist relationships exist
+        for (const artistId of artistIds) {
+            await prisma.trackArtist.upsert({
+                where: {
+                    trackId_artistId: {
+                        trackId: existing.id,
+                        artistId,
+                    },
+                },
+                create: {
+                    trackId: existing.id,
+                    artistId,
+                },
+                update: {},
+            });
+        }
+
         // Store in cache
         ctx?.trackCache.set(track.spotifyId, existing.id);
         return { trackId: existing.id, artistIds };

@@ -35,14 +35,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     const [isImportOpen, setIsImportOpen] = React.useState(false);
     const [isLogoutOpen, setIsLogoutOpen] = React.useState(false);
 
-    // Get background mode from context
     const { mode, next, previous } = useBackgroundMode();
 
-    // Fetch data based on mode
     const { artists } = useTopArtists("year");
     const { image: songImage } = useSongOfTheDay();
 
-    // Determine background image based on mode
     const backgroundImage = React.useMemo(() => {
         if (mode === "song-of-the-day") {
             return songImage || artists?.[0]?.image || "";
@@ -64,7 +61,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         setIsMobileMenuOpen(false);
     }, [pathname]);
 
-    // Prevent body scroll when mobile menu is open
     React.useEffect(() => {
         if (isMobileMenuOpen) {
             document.body.style.overflow = "hidden";
@@ -206,10 +202,28 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                             )}
                         </div>
 
-                        {/* Mobile Hamburger Button */}
+                        {/* Mobile Center: Background Rotation Arrows */}
+                        <div className="md:hidden flex items-center gap-2">
+                            <button
+                                onClick={previous}
+                                className="w-8 h-8 rounded-full backdrop-blur-md bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center transition-all"
+                                aria-label="Previous background"
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={next}
+                                className="w-8 h-8 rounded-full backdrop-blur-md bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center transition-all"
+                                aria-label="Next background"
+                            >
+                                <ChevronRight className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Mobile Hamburger Button - Absolute right */}
                         <button
                             onClick={() => setIsMobileMenuOpen(true)}
-                            className="md:hidden w-9 h-9 rounded-full backdrop-blur-md bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center transition-all"
+                            className="md:hidden absolute right-4 w-9 h-9 rounded-full backdrop-blur-md bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center transition-all"
                             aria-label="Open menu"
                         >
                             <Menu className="w-5 h-5" />

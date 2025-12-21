@@ -5,6 +5,7 @@ import { ContentRow } from '../content-row'
 // Mock lucide-react icons
 jest.mock('lucide-react', () => ({
     ChevronRight: () => <span data-testid="chevron-right">Right</span>,
+    ChevronLeft: () => <span data-testid="chevron-left">Left</span>,
     RefreshCw: ({ className }: { className?: string }) => <span data-testid="refresh-cw" className={className}>Refresh</span>
 }))
 
@@ -44,30 +45,31 @@ describe('ContentRow', () => {
             render(
                 <ContentRow title="Top Artists" items={mockArtistItems} type="artist" />
             )
-            expect(screen.getByText('Pink Floyd')).toBeInTheDocument()
-            expect(screen.getByText('Led Zeppelin')).toBeInTheDocument()
+            // Items appear in both desktop and mobile layouts
+            expect(screen.getAllByText('Pink Floyd').length).toBeGreaterThan(0)
+            expect(screen.getAllByText('Led Zeppelin').length).toBeGreaterThan(0)
         })
 
         it('renders artist type with name display', () => {
             render(
                 <ContentRow title="Top Artists" items={mockArtistItems} type="artist" />
             )
-            expect(screen.getByText('Pink Floyd')).toBeInTheDocument()
+            expect(screen.getAllByText('Pink Floyd').length).toBeGreaterThan(0)
         })
 
         it('renders track type with artist subtitle', () => {
             render(
                 <ContentRow title="Top Tracks" items={mockTrackItems} type="track" />
             )
-            expect(screen.getByText('Comfortably Numb')).toBeInTheDocument()
-            expect(screen.getByText('Pink Floyd')).toBeInTheDocument()
+            expect(screen.getAllByText('Comfortably Numb').length).toBeGreaterThan(0)
+            expect(screen.getAllByText('Pink Floyd').length).toBeGreaterThan(0)
         })
 
         it('renders wide type cards', () => {
             render(
                 <ContentRow title="Recently Played" items={mockWideItems} type="wide" />
             )
-            expect(screen.getByText('Recently Played 1')).toBeInTheDocument()
+            expect(screen.getAllByText('Recently Played 1').length).toBeGreaterThan(0)
         })
 
         it('renders empty state when no items', () => {
@@ -99,7 +101,8 @@ describe('ContentRow', () => {
                 />
             )
 
-            fireEvent.click(screen.getByText('Pink Floyd'))
+            // Click the first Pink Floyd element (may be in desktop or mobile view)
+            fireEvent.click(screen.getAllByText('Pink Floyd')[0])
             expect(mockOnItemClick).toHaveBeenCalledWith(mockArtistItems[0])
         })
 

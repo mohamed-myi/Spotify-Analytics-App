@@ -28,6 +28,14 @@ jest.mock('@/hooks/use-dashboard', () => ({
     }))
 }))
 
+jest.mock('@/hooks/use-song-of-the-day', () => ({
+    useSongOfTheDay: jest.fn(() => ({
+        track: { name: 'Test Song', artist: 'Test Artist' },
+        image: 'https://example.com/song.jpg',
+        isLoading: false
+    }))
+}))
+
 // Mock next/image
 jest.mock('next/image', () => ({
     __esModule: true,
@@ -39,7 +47,9 @@ jest.mock('lucide-react', () => ({
     LogOut: () => <span data-testid="logout-icon">Logout</span>,
     Upload: () => <span data-testid="upload-icon">Upload</span>,
     Menu: () => <span data-testid="menu-icon">Menu</span>,
-    X: () => <span data-testid="x-icon">X</span>
+    X: () => <span data-testid="x-icon">X</span>,
+    ChevronLeft: () => <span data-testid="chevron-left-icon">ChevronLeft</span>,
+    ChevronRight: () => <span data-testid="chevron-right-icon">ChevronRight</span>
 }))
 
 describe('AppLayout', () => {

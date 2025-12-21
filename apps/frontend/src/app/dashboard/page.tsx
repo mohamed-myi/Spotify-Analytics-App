@@ -5,7 +5,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { Hero } from "@/components/dashboard/hero";
 import { ContentRow } from "@/components/dashboard/content-row";
 import { ItemModal } from "@/components/dashboard/item-modal";
-import { useUser, useTopArtists, useTopTracks, useRecentHistory } from "@/hooks/use-dashboard";
+import { useUser, useTopArtists, useTopTracks } from "@/hooks/use-dashboard";
 import { useSongOfTheDay } from "@/hooks/use-song-of-the-day";
 
 interface SelectedItem {
@@ -35,7 +35,6 @@ export default function DashboardPage() {
 
     const { artists: topArtists, triggerManualRefresh: refreshArtists } = useTopArtists(artistRange);
     const { tracks: topTracks, triggerManualRefresh: refreshTracks } = useTopTracks(trackRange);
-    const { history: recentHistory } = useRecentHistory(20);
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
@@ -73,16 +72,9 @@ export default function DashboardPage() {
                     />
 
                     <ContentRow
-                        title="Recently Played"
-                        items={recentHistory || []}
-                        type="wide"
-                        onItemClick={setSelectedItem}
-                    />
-
-                    <ContentRow
                         title="Top Tracks"
                         items={topTracks || []}
-                        type="wide"
+                        type="track"
                         showTimeRange
                         selectedRange={trackRange}
                         showRank={true}
@@ -103,3 +95,4 @@ export default function DashboardPage() {
         </AppLayout>
     );
 }
+

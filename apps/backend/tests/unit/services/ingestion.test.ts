@@ -23,6 +23,9 @@ const mockPrisma = {
         create: jest.fn(),
         update: jest.fn(),
     },
+    trackArtist: {
+        upsert: jest.fn(),
+    },
     listeningEvent: {
         findUnique: jest.fn(),
         create: jest.fn(),
