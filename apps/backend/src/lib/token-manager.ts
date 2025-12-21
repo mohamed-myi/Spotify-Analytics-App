@@ -74,13 +74,13 @@ export async function refreshUserToken(userId: string): Promise<TokenResult | nu
         };
     } catch (error) {
         if (error instanceof TokenRefreshError && error.isRevoked) {
-            // Token was revoked by user - immediate invalidation
+            // Token was revoked by user; immediate invalidation
             await invalidateUserToken(userId, 'token_revoked_by_user');
             logger.warn({ userId }, 'Token revoked by user');
             return null;
         }
 
-        // Other errors - log but don't invalidate 
+        // Other errors; log but don't invalidate
         logger.error({ userId, error }, 'Token refresh failed');
         throw error;
     }

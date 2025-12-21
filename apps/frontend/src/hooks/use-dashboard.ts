@@ -1,5 +1,5 @@
 import useSWR from "swr";
-import { fetcher } from "@/lib/api";
+import { fetcher, api } from "@/lib/api";
 import { UserProfile } from "@/lib/types";
 
 // API response types
@@ -50,7 +50,7 @@ export function useUser() {
 }
 
 export function useTopArtists(range: string = "4weeks") {
-    const { data, error, isLoading } = useSWR<SpotifyArtistResponse[]>(`/me/stats/top/artists?range=${range}`, fetcher);
+    const { data, error, isLoading, mutate } = useSWR<SpotifyArtistResponse[]>(`/me/stats/top/artists?range=${range}`, fetcher);
 
     const mappedData = data?.map((item, index) => ({
         id: item.id,
@@ -60,15 +60,27 @@ export function useTopArtists(range: string = "4weeks") {
         rank: item.rank || index + 1,
     }));
 
+    const triggerManualRefresh = async () => {
+        try {
+            await api.post('/me/stats/top/refresh');
+            // Revalidate after delay to allow background job to complete
+            setTimeout(() => mutate(), 5000);
+        } catch {
+            // 429 means cooldown active - ignore
+        }
+    };
+
     return {
         artists: mappedData,
         isLoading,
         isError: error,
+        mutate,
+        triggerManualRefresh,
     };
 }
 
 export function useTopTracks(range: string = "4weeks") {
-    const { data, error, isLoading } = useSWR<SpotifyTrackResponse[]>(`/me/stats/top/tracks?range=${range}`, fetcher);
+    const { data, error, isLoading, mutate } = useSWR<SpotifyTrackResponse[]>(`/me/stats/top/tracks?range=${range}`, fetcher);
 
     const mappedData = data?.map((item, index) => ({
         id: item.id,
@@ -81,10 +93,21 @@ export function useTopTracks(range: string = "4weeks") {
         rank: item.rank || index + 1,
     }));
 
+    const triggerManualRefresh = async () => {
+        try {
+            await api.post('/me/stats/top/refresh');
+            setTimeout(() => mutate(), 5000);
+        } catch {
+            // 429 means cooldown active - ignore
+        }
+    };
+
     return {
         tracks: mappedData,
         isLoading,
         isError: error,
+        mutate,
+        triggerManualRefresh,
     };
 }
 
@@ -107,4 +130,5 @@ export function useRecentHistory(limit: number = 50) {
         isError: error
     };
 }
+
 

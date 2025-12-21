@@ -114,7 +114,7 @@ export async function pingRedis(): Promise<boolean> {
     }
 }
 
-// Helper for caching pattern: Get -> Return if cached -> Fetch -> Set -> Return
+// Helper for caching pattern: Get, Return if cached, Fetch, Set, Return
 export async function getOrSet<T>(
     key: string,
     ttlSeconds: number,

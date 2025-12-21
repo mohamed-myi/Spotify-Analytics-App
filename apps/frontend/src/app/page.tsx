@@ -21,7 +21,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-black text-white p-4">
-      {/* Background Grid Effect - only for authenticated users */}
+      {/* Background Grid Effect, only for authenticated users */}
       {isAuthenticated && (
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:14px_24px] pointer-events-none" />
       )}
@@ -39,14 +39,14 @@ export default function LandingPage() {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-4">
-            {/* Profile/Logo display - NOT clickable, scaled to 150% */}
+            {/* Profile/Logo display */}
             <motion.div
               className="w-48 h-48 md:w-60 md:h-60 rounded-full overflow-hidden shadow-2xl relative flex items-center justify-center"
             >
               {isAuthenticated && user?.image ? (
                 <Image src={user.image} alt={user.displayName || "User"} fill className="object-cover" unoptimized />
               ) : (
-                // MYI Logo - brand mark from SVG
+                // MYI Logo
                 <img
                   src="/brand/myi-logo.svg"
                   alt="MYI"

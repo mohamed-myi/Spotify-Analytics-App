@@ -34,21 +34,21 @@ async function fetchTracksBatch(accessToken: string, trackIds: string[]): Promis
 }
 
 async function backfillAlbumImages() {
-    console.log("🔍 Analyzing track/album data...\n");
+    console.log("Analyzing track/album data...\n");
 
     // Step 1: Find tracks with no album
     const tracksWithoutAlbum = await prisma.track.findMany({
         where: { albumId: null },
         select: { id: true, spotifyId: true, name: true },
     });
-    console.log(`📊 Tracks without album: ${tracksWithoutAlbum.length}`);
+    console.log(`Tracks without album: ${tracksWithoutAlbum.length}`);
 
     // Step 2: Find albums without images
     const albumsWithoutImage = await prisma.album.findMany({
         where: { imageUrl: null },
         select: { id: true, spotifyId: true, name: true },
     });
-    console.log(`📊 Albums without imageUrl: ${albumsWithoutImage.length}`);
+    console.log(`Albums without imageUrl: ${albumsWithoutImage.length}`);
 
     // Step 3: Find tracks that have albums but albums have no image
     const tracksWithAlbumNoImage = await prisma.track.findMany({
@@ -58,7 +58,7 @@ async function backfillAlbumImages() {
         },
         select: { id: true, spotifyId: true, name: true, album: { select: { id: true, spotifyId: true } } },
     });
-    console.log(`📊 Tracks with album but no image: ${tracksWithAlbumNoImage.length}\n`);
+    console.log(`Tracks with album but no image: ${tracksWithAlbumNoImage.length}\n`);
 
     // Combine all tracks that need backfill
     const allTracksToBackfill = new Map<string, { id: string; spotifyId: string; name: string }>();
@@ -84,16 +84,16 @@ async function backfillAlbumImages() {
     }
 
     if (invalidIdCount > 0) {
-        console.log(`⚠️  ${invalidIdCount} tracks have invalid Spotify IDs (examples: ${invalidExamples.join(", ")})`);
+        console.log(`WARNING: ${invalidIdCount} tracks have invalid Spotify IDs (examples: ${invalidExamples.join(", ")})`);
     }
 
     const tracksToProcess = Array.from(allTracksToBackfill.values());
-    console.log(`🔧 Total unique tracks to backfill: ${tracksToProcess.length}\n`);
+    console.log(`Total unique tracks to backfill: ${tracksToProcess.length}\n`);
 
     if (tracksToProcess.length === 0) {
         // Check if there are albums without images that we could update directly
         if (albumsWithoutImage.length > 0) {
-            console.log("📌 No valid tracks to process, but found albums without images.");
+            console.log("No valid tracks to process, but found albums without images.");
             console.log("   This might indicate tracks have old-format Spotify IDs.");
             console.log("   Attempting to find valid tracks linked to these albums...\n");
 
@@ -113,7 +113,7 @@ async function backfillAlbumImages() {
         }
 
         if (allTracksToBackfill.size === 0) {
-            console.log("✅ All tracks have valid album images or no valid IDs to process!");
+            console.log("All tracks have valid album images or no valid IDs to process!");
             return;
         }
     }
@@ -125,15 +125,15 @@ async function backfillAlbumImages() {
     });
 
     if (!user) {
-        console.error("❌ No user with valid token found");
+        console.error("ERROR: No user with valid token found");
         return;
     }
 
-    console.log(`🔑 Using token from user: ${user.displayName || user.id}\n`);
+    console.log(`Using token from user: ${user.displayName || user.id}\n`);
 
     const tokenResult = await getValidAccessToken(user.id);
     if (!tokenResult) {
-        console.error("❌ Failed to get valid access token");
+        console.error("ERROR: Failed to get valid access token");
         return;
     }
 
@@ -232,7 +232,7 @@ async function backfillAlbumImages() {
         await new Promise((r) => setTimeout(r, 100));
     }
 
-    console.log(`\n✅ Album image backfill complete!`);
+    console.log(`\nAlbum image backfill complete!`);
     console.log(`   Processed: ${processedCount}`);
     console.log(`   Updated: ${updatedCount}`);
     console.log(`   Errors: ${errorCount}`);

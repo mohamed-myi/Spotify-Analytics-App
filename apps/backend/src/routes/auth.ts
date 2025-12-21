@@ -21,7 +21,7 @@ const COOKIE_OPTIONS = {
 };
 
 export async function authRoutes(fastify: FastifyInstance) {
-    // GET /auth/login - Redirect to Spotify auth (stricter rate limit: 20/minute)
+    // GET /auth/login: Redirect to Spotify auth (stricter rate limit: 20/minute)
     fastify.get('/auth/login', {
         config: { rateLimit: AUTH_RATE_LIMIT },
         schema: {
@@ -50,7 +50,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         return reply.redirect(authUrl);
     });
 
-    // GET /auth/callback - Handle Spotify OAuth callback (stricter rate limit: 20/minute)
+    // GET /auth/callback: Handle Spotify OAuth callback (stricter rate limit: 20/minute)
     fastify.get('/auth/callback', {
         config: { rateLimit: AUTH_RATE_LIMIT },
         schema: {
@@ -119,6 +119,7 @@ export async function authRoutes(fastify: FastifyInstance) {
                     email: profile.email,
                     imageUrl: profile.images?.[0]?.url || null,
                     country: profile.country,
+                    lastLoginAt: new Date(),
                     auth: {
                         create: {
                             refreshToken: encryptedRefreshToken,
@@ -134,6 +135,7 @@ export async function authRoutes(fastify: FastifyInstance) {
                     email: profile.email,
                     imageUrl: profile.images?.[0]?.url || null,
                     country: profile.country,
+                    lastLoginAt: new Date(),
                     auth: {
                         upsert: {
                             create: {
@@ -186,7 +188,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         }
     });
 
-    // POST /auth/logout - Clear session
+    // POST /auth/logout: Clear session
     fastify.post('/auth/logout', {
         schema: {
             description: 'Logout current user',
@@ -206,7 +208,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         return { success: true };
     });
 
-    // GET /auth/me - Get current user
+    // GET /auth/me: Get current user
     fastify.get('/auth/me', {
         schema: {
             description: 'Get current authenticated user profile',
@@ -221,7 +223,8 @@ export async function authRoutes(fastify: FastifyInstance) {
                         email: { type: 'string' },
                         imageUrl: { type: 'string', nullable: true },
                         country: { type: 'string' },
-                        createdAt: { type: 'string', format: 'date-time' }
+                        createdAt: { type: 'string', format: 'date-time' },
+                        hasImportedHistory: { type: 'boolean' }
                     }
                 },
                 401: {
@@ -258,6 +261,12 @@ export async function authRoutes(fastify: FastifyInstance) {
             return reply.status(401).send({ error: 'User not found' });
         }
 
-        return user;
+        // Check if user has completed at least one import
+        const hasImportedHistory = await prisma.importJob.findFirst({
+            where: { userId: user.id, status: 'completed' },
+            select: { id: true }
+        }) !== null;
+
+        return { ...user, hasImportedHistory };
     });
 }

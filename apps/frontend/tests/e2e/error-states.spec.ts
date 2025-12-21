@@ -15,7 +15,7 @@ test.describe('Error Handling', () => {
 
         await page.goto('/dashboard')
 
-        // App should not crash - navigation should still work
+        // App should not crash; navigation should still work
         await expect(page.getByText('MYI')).toBeVisible()
         await expect(page.getByText('Browse')).toBeVisible()
     })
@@ -48,7 +48,7 @@ test.describe('Error Handling', () => {
 
         await page.goto('/dashboard')
 
-        // Hero shows "Loading..." as fallback when no top artist
+        // Main graphic shows "Loading..." as fallback when no top artist
         await expect(page.getByText('Loading...')).toBeVisible()
     })
 })

@@ -29,6 +29,21 @@ jest.mock('../../src/workers/queues', () => ({
     },
 }));
 
+jest.mock('../../src/workers/top-stats-queue', () => ({
+    topStatsQueue: {
+        addBulk: jest.fn().mockResolvedValue([]),
+        getWaitingCount: jest.fn().mockResolvedValue(2),
+        getActiveCount: jest.fn().mockResolvedValue(1),
+        getCompletedCount: jest.fn().mockResolvedValue(50),
+        getFailedCount: jest.fn().mockResolvedValue(0),
+    },
+}));
+
+jest.mock('../../src/services/top-stats-service', () => ({
+    hoursAgo: jest.fn((h: number) => new Date(Date.now() - h * 60 * 60 * 1000)),
+    daysAgo: jest.fn((d: number) => new Date(Date.now() - d * 24 * 60 * 60 * 1000)),
+}));
+
 // Mock Prisma to avoid hitting real database
 jest.mock('../../src/lib/prisma', () => ({
     prisma: {
@@ -121,11 +136,13 @@ describe('cron routes', () => {
 
             expect(response.statusCode).toBe(200);
             const body = response.json();
-            expect(body.queue).toBe('sync-user');
-            expect(typeof body.waiting).toBe('number');
-            expect(typeof body.active).toBe('number');
-            expect(typeof body.completed).toBe('number');
-            expect(typeof body.failed).toBe('number');
+            // New response structure with syncUser and topStats queues
+            expect(typeof body.syncUser.waiting).toBe('number');
+            expect(typeof body.syncUser.active).toBe('number');
+            expect(typeof body.syncUser.completed).toBe('number');
+            expect(typeof body.syncUser.failed).toBe('number');
+            expect(typeof body.topStats.waiting).toBe('number');
+            expect(typeof body.topStats.active).toBe('number');
         });
     });
 });

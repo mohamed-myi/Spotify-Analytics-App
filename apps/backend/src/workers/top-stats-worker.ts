@@ -1,181 +1,97 @@
+import { Worker } from 'bullmq';
+import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
-import { getValidAccessToken } from '../lib/token-manager';
-import { getTopTracks, getTopArtists, TimeRange } from '../lib/spotify-api';
-import { upsertTrack, upsertArtist } from '../services/ingestion';
-import { waitForRateLimit } from '../lib/redis';
 import { workerLoggers } from '../lib/logger';
 import { setTopStatsWorkerRunning } from './worker-status';
+import { topStatsQueue, TopStatsJobData } from './top-stats-queue';
+import { processUserTopStats } from '../services/top-stats-service';
 
 const log = workerLoggers.topStats;
 
-const TERMS: TimeRange[] = ['short_term', 'medium_term', 'long_term'];
+// Job timeout: 30 seconds per user
+const JOB_TIMEOUT_MS = 30000;
 
-async function processUserTopStats(userId: string) {
-    const tokenResult = await getValidAccessToken(userId);
-    if (!tokenResult) {
-        log.info({ userId }, 'Skipping top stats: No valid token');
-        return;
-    }
-    const accessToken = tokenResult.accessToken;
-
-    for (const term of TERMS) {
-        await waitForRateLimit();
-
-        // Top Tracks
-        try {
-            const topTracksRes = await getTopTracks(accessToken, term, 50);
-
-            // Upsert each rank.
-
-            for (let i = 0; i < topTracksRes.items.length; i++) {
-                const spotifyTrack = topTracksRes.items[i];
-                const rank = i + 1;
-
-                // Adapt to Ingestion format
-                const trackForIngest = {
-                    spotifyId: spotifyTrack.id,
-                    name: spotifyTrack.name,
-                    durationMs: spotifyTrack.duration_ms,
-                    previewUrl: spotifyTrack.preview_url,
-                    album: {
-                        spotifyId: spotifyTrack.album.id,
-                        name: spotifyTrack.album.name,
-                        imageUrl: spotifyTrack.album.images[0]?.url || null,
-                        releaseDate: spotifyTrack.album.release_date,
-                    },
-                    artists: spotifyTrack.artists.map(a => ({ spotifyId: a.id, name: a.name })),
-                };
-
-                // Ensure Track exists
-                const { trackId } = await upsertTrack(trackForIngest);
-
-                // Store Top Rank
-                await prisma.spotifyTopTrack.upsert({
-                    where: {
-                        userId_term_rank: { userId, term, rank }
-                    },
-                    create: {
-                        userId,
-                        term,
-                        rank,
-                        trackId
-                    },
-                    update: {
-                        trackId
-                    }
-                });
-            }
-            // "limit" is 50, usually providing 50. If less, we should delete the extras.
-            if (topTracksRes.items.length < 50) {
-                await prisma.spotifyTopTrack.deleteMany({
-                    where: {
-                        userId,
-                        term,
-                        rank: { gt: topTracksRes.items.length }
-                    }
-                });
-            }
-
-        } catch (err) {
-            log.error({ term, userId, error: err }, 'Error fetching top tracks');
-        }
-
-        await waitForRateLimit();
-
-        // 2. Top Artists
-        try {
-            const topArtistsRes = await getTopArtists(accessToken, term, 50);
-
-            for (let i = 0; i < topArtistsRes.items.length; i++) {
-                const spotifyArtist = topArtistsRes.items[i];
-                const rank = i + 1;
-
-                const artistData = {
-                    spotifyId: spotifyArtist.id,
-                    name: spotifyArtist.name,
-                    imageUrl: spotifyArtist.images[0]?.url,
-                    genres: spotifyArtist.genres
-                };
-
-                const artistId = (await prisma.artist.upsert({
-                    where: { spotifyId: artistData.spotifyId },
-                    create: artistData,
-                    update: {
-                        imageUrl: artistData.imageUrl,
-                        genres: artistData.genres
-                    },
-                    select: { id: true }
-                })).id;
-
-                await prisma.spotifyTopArtist.upsert({
-                    where: {
-                        userId_term_rank: { userId, term, rank }
-                    },
-                    create: {
-                        userId,
-                        term,
-                        rank,
-                        artistId
-                    },
-                    update: {
-                        artistId
-                    }
-                });
-            }
-            if (topArtistsRes.items.length < 50) {
-                await prisma.spotifyTopArtist.deleteMany({
-                    where: {
-                        userId,
-                        term,
-                        rank: { gt: topArtistsRes.items.length }
-                    }
-                });
-            }
-
-        } catch (err) {
-            log.error({ term, userId, error: err }, 'Error fetching top artists');
-        }
-    }
+/**
+ * Extract Retry-After from error message (if 429 response)
+ */
+function extractRetryAfter(error: Error): number | null {
+    const match = error.message.match(/retry.?after[:\s]*(\d+)/i);
+    return match ? parseInt(match[1], 10) : null;
 }
 
-export async function topStatsWorker() {
-    log.info('Top stats worker started');
-    setTopStatsWorkerRunning(true);
+// BullMQ worker for processing top-stats jobs.
+export const topStatsWorker = new Worker<TopStatsJobData>(
+    'top-stats',
+    async (job) => {
+        const { userId, priority } = job.data;
+        log.info({ userId, priority, jobId: job.id }, 'Processing top stats job');
 
-    // Hourly loop
-    const ONE_HOUR_MS = 60 * 60 * 1000;
+        const startTime = Date.now();
 
-    while (true) {
         try {
-            const start = Date.now();
-
-            // Get all users with valid tokens
-            // Ideally we'd stagger this or have a "next_sync_at" field.
-            // For now, just grab everyone.
-            const users = await prisma.spotifyAuth.findMany({
-                where: { isValid: true },
-                select: { userId: true }
+            // Set up timeout
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error('Job timeout')), JOB_TIMEOUT_MS);
             });
 
-            log.info({ userCount: users.length }, 'Syncing top stats for users');
+            // Race between processing and timeout
+            await Promise.race([
+                processUserTopStats(userId),
+                timeoutPromise
+            ]);
 
-            for (const user of users) {
-                try {
-                    await processUserTopStats(user.userId);
-                } catch (userError) {
-                    log.error({ userId: user.userId, error: userError }, 'Error processing top stats for user');
-                }
-            }
+            // Update refresh timestamp on success
+            await prisma.user.update({
+                where: { id: userId },
+                data: { topStatsRefreshedAt: new Date() }
+            });
 
-            const elapsed = Date.now() - start;
-            const sleepTime = Math.max(0, ONE_HOUR_MS - elapsed);
-
-            log.info({ sleepMinutes: Math.round(sleepTime / 1000 / 60) }, 'Top stats sync complete');
-            await new Promise(resolve => setTimeout(resolve, sleepTime));
+            const elapsed = Date.now() - startTime;
+            log.info({ userId, elapsedMs: elapsed }, 'Top stats refresh completed');
 
         } catch (error) {
-            log.error({ error }, 'Top stats worker crashed');
-            await new Promise(resolve => setTimeout(resolve, 60000)); // Sleep 1 min on crash
+            log.error({ userId, error }, 'Top stats job failed');
+            throw error;  // Let BullMQ handle retries
         }
+    },
+    {
+        connection: redis,
+        concurrency: 3,  // Process 3 users at a time
     }
+);
+
+// Handle worker events
+topStatsWorker.on('completed', (job) => {
+    log.debug({ jobId: job.id, userId: job.data.userId }, 'Top stats job completed');
+});
+
+topStatsWorker.on('failed', async (job, error) => {
+    if (!job) return;
+
+    const { userId, priority } = job.data;
+    log.warn({ userId, priority, error: error.message, attempts: job.attemptsMade }, 'Top stats job failed');
+
+    // Handle 429 rate limit: pause entire queue
+    if (error.message.includes('429') || error.message.includes('rate limit')) {
+        const retryAfter = extractRetryAfter(error) || 60;
+        log.warn({ retryAfter }, 'Rate limited, pausing queue');
+
+        await topStatsQueue.pause();
+        setTimeout(async () => {
+            await topStatsQueue.resume();
+            log.info('Queue resumed after rate limit');
+        }, retryAfter * 1000);
+    }
+});
+
+topStatsWorker.on('error', (error) => {
+    log.error({ error }, 'Top stats worker error');
+});
+
+// Track worker status for health checks
+setTopStatsWorkerRunning(true);
+
+export async function closeTopStatsWorker(): Promise<void> {
+    setTopStatsWorkerRunning(false);
+    await topStatsWorker.close();
 }

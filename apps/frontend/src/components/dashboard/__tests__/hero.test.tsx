@@ -22,8 +22,8 @@ jest.mock('lucide-react', () => ({
 
 const defaultProps = {
     title: 'Pink Floyd',
-    subtitle: '#1 All-Time Artist',
-    description: 'Your top artist across all time.',
+    subtitle: '#1 Last Year Artist',
+    description: 'Your top artist from the last year.',
     image: 'http://img.com/pf.jpg'
 }
 
@@ -37,13 +37,13 @@ describe('Hero', () => {
     it('renders subtitle badge', () => {
         render(<Hero {...defaultProps} />)
 
-        expect(screen.getByText('#1 All-Time Artist')).toBeInTheDocument()
+        expect(screen.getByText('#1 Last Year Artist')).toBeInTheDocument()
     })
 
     it('renders description text', () => {
         render(<Hero {...defaultProps} />)
 
-        expect(screen.getByText('Your top artist across all time.')).toBeInTheDocument()
+        expect(screen.getByText('Your top artist from the last year.')).toBeInTheDocument()
     })
 
     it('renders Play History button', () => {

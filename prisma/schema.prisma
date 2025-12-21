@@ -17,6 +17,8 @@ model User {
   country         String?
   createdAt       DateTime @default(now()) @map("created_at")
   lastIngestedAt  DateTime? @map("last_ingested_at")
+  lastLoginAt     DateTime? @map("last_login_at")
+  topStatsRefreshedAt DateTime? @map("top_stats_refreshed_at")
 
   auth            SpotifyAuth?
   settings        UserSettings?

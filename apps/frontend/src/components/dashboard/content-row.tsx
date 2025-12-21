@@ -2,7 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import Image from "next/image";
 
 interface ContentItem {
@@ -23,19 +23,25 @@ interface ContentRowProps {
     showRank?: boolean;
     onRangeChange?: (range: string) => void;
     onItemClick?: (item: ContentItem) => void;
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
+    hasImportedHistory?: boolean;
 }
 
-export function ContentRow({ title, items, type, showTimeRange = false, selectedRange = "all", showRank = false, onRangeChange, onItemClick }: ContentRowProps) {
+export function ContentRow({ title, items, type, showTimeRange = false, selectedRange = "year", showRank = false, onRangeChange, onItemClick, onRefresh, isRefreshing = false, hasImportedHistory = false }: ContentRowProps) {
     const scrollContainer = useRef<HTMLDivElement>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-    const ranges = [
+    const baseRanges = [
         { label: "Last 4 Weeks", value: "4weeks" },
         { label: "Last 6 Months", value: "6months" },
-        { label: "All Time", value: "all" }
+        { label: "Last 1 Year", value: "year" }
     ];
+    const ranges = hasImportedHistory
+        ? [...baseRanges, { label: "All Time", value: "alltime" }]
+        : baseRanges;
 
-    const currentLabel = ranges.find(r => r.value === selectedRange)?.label || "All-Time";
+    const currentLabel = ranges.find(r => r.value === selectedRange)?.label || "Last 1 Year";
 
     const scroll = (direction: "left" | "right") => {
         if (scrollContainer.current) {
@@ -79,6 +85,17 @@ export function ContentRow({ title, items, type, showTimeRange = false, selected
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {onRefresh && (
+                        <button
+                            onClick={onRefresh}
+                            disabled={isRefreshing}
+                            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white disabled:opacity-50 transition-colors"
+                            title="Refresh data"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        </button>
                     )}
                 </div>
                 <div className="hidden group-hover:flex gap-2">

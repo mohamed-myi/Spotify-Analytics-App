@@ -11,7 +11,8 @@ jest.mock('../../../src/lib/redis', () => ({
 // Mock Prisma with all needed operations
 const mockPrisma = {
     album: {
-        upsert: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
     },
     artist: {
         findUnique: jest.fn(),
@@ -71,7 +72,8 @@ describe('services/ingestion', () => {
         jest.clearAllMocks();
 
         // Default successful mocks
-        mockPrisma.album.upsert.mockResolvedValue({ id: 'album-uuid' });
+        mockPrisma.album.findUnique.mockResolvedValue(null);
+        mockPrisma.album.create.mockResolvedValue({ id: 'album-uuid' });
         mockPrisma.artist.findUnique.mockResolvedValue(null);
         mockPrisma.artist.create.mockResolvedValue({ id: 'artist-uuid' });
         mockPrisma.track.findUnique.mockResolvedValue(null);
@@ -197,7 +199,7 @@ describe('services/ingestion', () => {
         });
 
         it('counts errors when insert fails', async () => {
-            mockPrisma.album.upsert.mockRejectedValueOnce(new Error('DB error'));
+            mockPrisma.album.findUnique.mockRejectedValueOnce(new Error('DB error'));
 
             const events = [createTestEvent()];
             const summary = await insertListeningEvents('user-123', events);
@@ -219,9 +221,11 @@ describe('services/ingestion', () => {
         });
 
         it('handles mixed success and failure', async () => {
-            mockPrisma.album.upsert
-                .mockResolvedValueOnce({ id: 'album-1' })
+            // First call succeeds, second fails
+            mockPrisma.album.findUnique
+                .mockResolvedValueOnce(null)
                 .mockRejectedValueOnce(new Error('DB error'));
+            mockPrisma.album.create.mockResolvedValueOnce({ id: 'album-1' });
 
             const events = [
                 createTestEvent({ playedAt: new Date('2025-01-01T12:00:00Z') }),

@@ -8,7 +8,7 @@ const TIMEZONES = [
 ];
 
 export async function settingsRoutes(fastify: FastifyInstance) {
-    // GET /me/settings - Get current user settings
+    // GET /me/settings: Get current user settings
     fastify.get('/me/settings', {
         schema: {
             description: 'Get current user settings',
@@ -63,7 +63,7 @@ export async function settingsRoutes(fastify: FastifyInstance) {
         return settings;
     });
 
-    // PATCH /me/settings - Update user settings
+    // PATCH /me/settings: Update user settings
     fastify.patch('/me/settings', {
         schema: {
             description: 'Update user settings',
@@ -133,7 +133,7 @@ export async function settingsRoutes(fastify: FastifyInstance) {
         return updated;
     });
 
-    // GET /me/settings/timezones - Get available timezones
+    // GET /me/settings/timezones: Get available timezones
     fastify.get('/me/settings/timezones', {
         schema: {
             description: 'Get list of supported timezones',

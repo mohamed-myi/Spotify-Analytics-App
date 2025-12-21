@@ -85,7 +85,7 @@ export const build = async () => {
 
 import { audioFeaturesWorker } from './workers/audio-features-worker';
 import { metadataWorker } from './workers/metadata-worker';
-import { topStatsWorker } from './workers/top-stats-worker';
+import { topStatsWorker, closeTopStatsWorker } from './workers/top-stats-worker';
 
 // Start server if main module
 if (require.main === module) {
@@ -98,14 +98,14 @@ if (require.main === module) {
       logger.info('Server started, sync worker running');
 
       // Start background workers
-      // In a real production setup, these would likely be separate processes/containers
+      // In a real production setup, these would likely be processes/containers but I am running a free option.
       audioFeaturesWorker().catch(err => logger.error({ error: err }, 'Audio Features Worker failed'));
       metadataWorker().catch(err => logger.error({ error: err }, 'Metadata Worker failed'));
-      topStatsWorker().catch(err => logger.error({ error: err }, 'Top Stats Worker failed'));
 
       const shutdown = async () => {
         logger.info('Shutting down gracefully...');
         await closeSyncWorker();
+        await closeTopStatsWorker();
         await closeRedis();
         await server.close();
         process.exit(0);
@@ -121,3 +121,4 @@ if (require.main === module) {
 
   start();
 }
+

@@ -39,7 +39,7 @@ async function check() {
             withImage++;
         } else {
             withoutImage++;
-            console.log(`❌ No image: "${track.name}"`);
+            console.log(`No image: "${track.name}"`);
             console.log(`   Track spotifyId: ${track.spotifyId}`);
             console.log(`   Album: ${track.album?.name || 'NO ALBUM'}`);
             console.log(`   Album spotifyId: ${track.album?.spotifyId || 'N/A'}`);

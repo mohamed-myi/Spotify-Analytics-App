@@ -6,7 +6,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { Hero } from "@/components/dashboard/hero";
 import { ContentRow } from "@/components/dashboard/content-row";
 import { ItemModal } from "@/components/dashboard/item-modal";
-import { useTopArtists, useTopTracks, useRecentHistory } from "@/hooks/use-dashboard";
+import { useUser, useTopArtists, useTopTracks, useRecentHistory } from "@/hooks/use-dashboard";
 
 interface SelectedItem {
     id: string;
@@ -19,23 +19,36 @@ interface SelectedItem {
 
 export default function DashboardPage() {
     const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
-    const [artistRange, setArtistRange] = useState("all");
+    const [artistRange, setArtistRange] = useState("year");
     const [trackRange, setTrackRange] = useState("4weeks");
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
-    const { artists: topArtists } = useTopArtists(artistRange);
-    const { tracks: topTracks } = useTopTracks(trackRange);
+    const { user } = useUser();
+    const hasImported = user?.hasImportedHistory ?? false;
+
+    // Hero shows all-time top artist if imported, else 1-year
+    const heroRange = hasImported ? 'alltime' : 'year';
+    const { artists: heroArtists } = useTopArtists(heroRange);
+
+    const { artists: topArtists, triggerManualRefresh: refreshArtists } = useTopArtists(artistRange);
+    const { tracks: topTracks, triggerManualRefresh: refreshTracks } = useTopTracks(trackRange);
     const { history: recentHistory } = useRecentHistory(20);
 
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        await Promise.all([refreshArtists(), refreshTracks()]);
+        setTimeout(() => setIsRefreshing(false), 5000);
+    };
 
     return (
         <AppLayout>
             <div className="min-h-screen bg-background pb-20">
 
                 <Hero
-                    title={topArtists?.[0]?.name || "Loading..."}
-                    subtitle="#1 All-Time Artist"
-                    description="Your top artist across all time."
-                    image={topArtists?.[0]?.image || ""}
+                    title={heroArtists?.[0]?.name || "Loading..."}
+                    subtitle="#1 Artist"
+                    description={hasImported ? "Your all-time favorite artist." : "Your favorite artist over the last year."}
+                    image={heroArtists?.[0]?.image || ""}
                 />
 
                 <div className="-mt-32 relative z-20 space-y-8">
@@ -48,6 +61,9 @@ export default function DashboardPage() {
                         showRank={true}
                         onRangeChange={setArtistRange}
                         onItemClick={setSelectedItem}
+                        onRefresh={handleRefresh}
+                        isRefreshing={isRefreshing}
+                        hasImportedHistory={hasImported}
                     />
 
                     <ContentRow
@@ -66,6 +82,9 @@ export default function DashboardPage() {
                         showRank={true}
                         onRangeChange={setTrackRange}
                         onItemClick={setSelectedItem}
+                        onRefresh={handleRefresh}
+                        isRefreshing={isRefreshing}
+                        hasImportedHistory={hasImported}
                     />
 
 
@@ -80,3 +99,4 @@ export default function DashboardPage() {
         </AppLayout>
     );
 }
+

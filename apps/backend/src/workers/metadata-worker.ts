@@ -7,7 +7,7 @@ import { setMetadataWorkerRunning } from './worker-status';
 
 const log = workerLoggers.metadata;
 
-// Process pending artists - fetch metadata and update DB
+// Process pending artists; fetch metadata and update DB
 async function processArtists(accessToken: string): Promise<number> {
     const artistIds = await popArtistsForMetadata(50);
     if (artistIds.length === 0) return 0;
@@ -51,7 +51,7 @@ async function processArtists(accessToken: string): Promise<number> {
     }
 }
 
-// Process pending tracks - fetch metadata, create albums, link artists
+// Process pending tracks; fetch metadata, create albums, link artists
 async function processTracks(accessToken: string): Promise<number> {
     const trackSpotifyIds = await popTracksForMetadata(50);
     if (trackSpotifyIds.length === 0) return 0;

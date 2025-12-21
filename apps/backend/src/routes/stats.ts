@@ -2,6 +2,8 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { redis, getOrSet } from '../lib/redis';
 import { toJSON } from '../lib/serialization';
+import { triggerLazyRefreshIfStale } from '../services/top-stats-service';
+import { topStatsQueue } from '../workers/top-stats-queue';
 
 const CACHE_TTL = 300;
 
@@ -12,7 +14,7 @@ const rangeSchema = {
         properties: {
             range: {
                 type: 'string',
-                enum: ['4weeks', '6months', 'all', 'year'],
+                enum: ['4weeks', '6months', 'year', 'alltime'],
                 default: '4weeks'
             }
         }
@@ -32,7 +34,7 @@ const historySchema = {
 
 export async function statsRoutes(fastify: FastifyInstance) {
 
-    // GET /me/stats/summary - Profile stats summary
+    // GET /me/stats/summary: Profile stats summary
     fastify.get('/me/stats/summary', {
         schema: {
             description: 'Get summary statistics for user profile',
@@ -258,6 +260,9 @@ export async function statsRoutes(fastify: FastifyInstance) {
         const userId = request.userId;
         if (!userId) return reply.status(401).send({ error: 'Unauthorized' });
 
+        // Lazy trigger: queue background refresh if stale (non-blocking)
+        const refreshStatus = await triggerLazyRefreshIfStale(userId);
+
         const range = request.query.range || '4weeks';
         const sortBy = request.query.sortBy || 'rank';
 
@@ -265,25 +270,19 @@ export async function statsRoutes(fastify: FastifyInstance) {
         const termMap: Record<string, string> = {
             '4weeks': 'short_term',
             '6months': 'medium_term',
-            'all': 'long_term',
             'year': 'long_term',
         };
-        const term = termMap[range] || 'short_term';
+        const term = termMap[range];
+        const isAllTime = range === 'alltime';
 
-        const cacheKey = `stats:tracks:${userId}:${term}:${sortBy}`;
+        const cacheKey = `stats:tracks:${userId}:${range}:${sortBy}`;
 
         const response = await getOrSet(cacheKey, CACHE_TTL, async () => {
-            if (sortBy === 'time') {
-                // Query UserTrackStats for "Real Deal" stats (based on totalMs)
-                // Note: 'range' here acts as a filter on 'lastPlayedAt' roughly, 
-                // but UserTrackStats is global. For global "On Repeat", we use all time.
-                // Ideally we'd use time buckets for ranges, but for MVP "On Repeat" usually implies recent or all-time heaviest.
-                // Let's stick to ALL TIME for sortBy=time for now, or maybe filter by ListeningEvents? 
-                // For now, let's return All-Time heavy hitters from UserTrackStats.
-
+            // All Time: use UserTrackStats (computed from imports + syncs)
+            if (isAllTime || sortBy === 'time') {
                 const topStats = await prisma.userTrackStats.findMany({
                     where: { userId },
-                    orderBy: { totalMs: 'desc' },
+                    orderBy: sortBy === 'time' ? { totalMs: 'desc' } : { playCount: 'desc' },
                     take: 50,
                     include: {
                         track: {
@@ -305,7 +304,7 @@ export async function statsRoutes(fastify: FastifyInstance) {
                 return toJSON(data);
 
             } else {
-                // Default: Query Spotify's actual Top Tracks
+                // Spotify API ranges: query SpotifyTopTrack
                 const topTracks = await prisma.spotifyTopTrack.findMany({
                     where: { userId, term },
                     orderBy: { rank: 'asc' },
@@ -322,8 +321,6 @@ export async function statsRoutes(fastify: FastifyInstance) {
                 const data = topTracks.map((t: any) => ({
                     ...t.track,
                     rank: t.rank,
-                    // We don't have totalMs here easily unless we join, but let's leave it null/undefined or fetch it? 
-                    // For now, let's leave it as is.
                 }));
 
                 return toJSON(data);
@@ -361,33 +358,54 @@ export async function statsRoutes(fastify: FastifyInstance) {
         const userId = request.userId;
         if (!userId) return reply.status(401).send({ error: 'Unauthorized' });
 
+        // Lazy trigger: queue background refresh if stale (non-blocking)
+        await triggerLazyRefreshIfStale(userId);
+
         const range = request.query.range || '4weeks';
 
         // Map frontend ranges to Spotify's time_range terms
         const termMap: Record<string, string> = {
-            '4weeks': 'short_term',      // 4 weeks
-            '6months': 'medium_term',    // 6 months  
-            'all': 'long_term',          // 1 year
-            'year': 'long_term',         // Fallback
+            '4weeks': 'short_term',
+            '6months': 'medium_term',
+            'year': 'long_term',
         };
-        const term = termMap[range] || 'short_term';
+        const term = termMap[range];
+        const isAllTime = range === 'alltime';
 
-        const cacheKey = `stats:artists:${userId}:${term}`;
+        const cacheKey = `stats:artists:${userId}:${range}`;
 
         const response = await getOrSet(cacheKey, CACHE_TTL, async () => {
-            // Query Spotify's actual Top Artists
-            const topArtists = await prisma.spotifyTopArtist.findMany({
-                where: { userId, term },
-                orderBy: { rank: 'asc' },
-                include: { artist: true },
-            });
+            // All Time: use UserArtistStats (computed from imports + syncs)
+            if (isAllTime) {
+                const topStats = await prisma.userArtistStats.findMany({
+                    where: { userId },
+                    orderBy: { playCount: 'desc' },
+                    take: 50,
+                    include: { artist: true }
+                });
 
-            const data = topArtists.map((a: any) => ({
-                ...a.artist,
-                rank: a.rank,
-            }));
+                const data = topStats.map((stat: any, index: number) => ({
+                    ...stat.artist,
+                    rank: index + 1,
+                    playCount: stat.playCount
+                }));
 
-            return toJSON(data);
+                return toJSON(data);
+            } else {
+                // Spotify API ranges: query SpotifyTopArtist
+                const topArtists = await prisma.spotifyTopArtist.findMany({
+                    where: { userId, term },
+                    orderBy: { rank: 'asc' },
+                    include: { artist: true },
+                });
+
+                const data = topArtists.map((a: any) => ({
+                    ...a.artist,
+                    rank: a.rank,
+                }));
+
+                return toJSON(data);
+            }
         });
 
         return response;
@@ -551,5 +569,42 @@ export async function statsRoutes(fastify: FastifyInstance) {
         ]);
 
         return toJSON({ events, total, page, limit });
+    });
+
+    // POST /me/stats/top/refresh: Manual refresh trigger (rate-limited: 1 per 10 min)
+    fastify.post('/me/stats/top/refresh', {
+        schema: {
+            description: 'Manually trigger a refresh of top stats (rate-limited)',
+            tags: ['Stats'],
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                },
+                401: { type: 'object', properties: { error: { type: 'string' } } },
+                429: { type: 'object', properties: { error: { type: 'string' } } }
+            }
+        },
+        config: {
+            rateLimit: {
+                max: 1,
+                timeWindow: '10 minutes',
+            }
+        }
+    }, async (request, reply) => {
+        const userId = request.userId;
+        if (!userId) return reply.status(401).send({ error: 'Unauthorized' });
+
+        // Queue high-priority job
+        await topStatsQueue.add(
+            `manual-${userId}`,
+            { userId, priority: 'high' },
+            { priority: 1, jobId: `manual-${userId}-${Date.now()}` }
+        );
+
+        return { success: true, message: 'Refresh queued' };
     });
 }

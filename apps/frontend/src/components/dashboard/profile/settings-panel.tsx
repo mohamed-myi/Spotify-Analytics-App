@@ -55,7 +55,7 @@ export function SettingsPanel() {
         try {
             await updateSettings({ [key]: value });
         } catch {
-            // Revert on error - refetch from server
+            // Revert on error; refetch from server
             mutate();
         }
     };

@@ -34,7 +34,7 @@ describe('AppLayout', () => {
         )
 
         expect(screen.getByTestId('child-content')).toBeInTheDocument()
-        expect(screen.getByText('MYI')).toBeInTheDocument()
+        expect(screen.getByAltText('MYI')).toBeInTheDocument()
         expect(screen.getByText('Browse')).toBeInTheDocument()
         expect(screen.getByText('History')).toBeInTheDocument()
     })
@@ -56,8 +56,13 @@ describe('AppLayout', () => {
 
         render(<AppLayout>Content</AppLayout>)
 
+        // Click logout in nav
         const logoutBtn = screen.getByTitle('Logout')
         fireEvent.click(logoutBtn)
+
+        // Click Yes in confirmation dialog
+        const confirmBtn = screen.getByText('Yes')
+        fireEvent.click(confirmBtn)
 
         await waitFor(() => {
             expect(api.post).toHaveBeenCalledWith('/auth/logout')
@@ -71,8 +76,13 @@ describe('AppLayout', () => {
 
         render(<AppLayout>Content</AppLayout>)
 
+        // Click logout in nav
         const logoutBtn = screen.getByTitle('Logout')
         fireEvent.click(logoutBtn)
+
+        // Click Yes in confirmation dialog
+        const confirmBtn = screen.getByText('Yes')
+        fireEvent.click(confirmBtn)
 
         await waitFor(() => {
             expect(api.post).toHaveBeenCalled()

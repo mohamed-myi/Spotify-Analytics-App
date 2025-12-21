@@ -74,17 +74,17 @@ function getErrorName(statusCode: number): string {
 
 // Returns appropriate error message.
 function getErrorMessage(error: FastifyError, statusCode: number): string {
-    // Validation errors - always show
+    // Validation errors; always show
     if (error.validation) {
         return `Validation failed: ${error.message}`;
     }
 
-    // 4xx errors - show message
+    // 4xx errors; show message
     if (statusCode < 500) {
         return error.message || 'Request failed';
     }
 
-    // 5xx errors - hide details in production
+    // 5xx errors; hide details in production
     if (isProd) {
         return 'An unexpected error occurred. Please try again later.';
     }

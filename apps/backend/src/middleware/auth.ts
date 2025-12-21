@@ -49,7 +49,7 @@ export async function authMiddleware(
         return;
     }
 
-    // Sliding session expiration - refresh cookie on each request
+    // Sliding session expiration; refresh cookie on each request
     reply.setCookie('session', sessionUserId, COOKIE_OPTIONS);
     reply.setCookie('auth_status', 'authenticated', {
         ...COOKIE_OPTIONS,

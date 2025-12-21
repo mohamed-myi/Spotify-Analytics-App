@@ -1,4 +1,4 @@
-// Token manager tests - mocking prisma and spotify modules
+// Token manager tests; mocking prisma and spotify modules
 
 // Mock modules before importing the module under test
 jest.mock('../../src/lib/prisma', () => ({
@@ -248,7 +248,7 @@ describe('token-manager', () => {
             const result = await recordTokenFailure('user-123', 'test_failure');
 
             expect(result).toBe(true);
-            // Should have called update twice - once for failure record, once for invalidation
+            // Should have called update twice; once for failure record, once for invalidation
             expect(prisma.spotifyAuth.update).toHaveBeenCalledTimes(2);
         });
     });

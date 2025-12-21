@@ -51,9 +51,9 @@ export interface InsertResultWithIds {
 
 // Per job caching context to reduce duplicate DB lookups
 export interface SyncContext {
-    albumCache: Map<string, string>;   // spotifyId → internal id
-    artistCache: Map<string, string>;  // spotifyId → internal id
-    trackCache: Map<string, string>;   // spotifyId → internal id
+    albumCache: Map<string, string>;   // spotifyId: internal id
+    artistCache: Map<string, string>;  // spotifyId: internal id
+    trackCache: Map<string, string>;   // spotifyId: internal id
 }
 
 export function createSyncContext(): SyncContext {

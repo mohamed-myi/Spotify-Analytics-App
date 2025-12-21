@@ -11,24 +11,30 @@ export async function upsertAlbum(
         return ctx.albumCache.get(album.spotifyId)!;
     }
 
-    const result = await prisma.album.upsert({
+    // Check database before writing (avoids unnecessary dead tuples)
+    const existing = await prisma.album.findUnique({
         where: { spotifyId: album.spotifyId },
-        create: {
+        select: { id: true },
+    });
+
+    if (existing) {
+        ctx?.albumCache.set(album.spotifyId, existing.id);
+        return existing.id;
+    }
+
+    // Only create if missing
+    const created = await prisma.album.create({
+        data: {
             spotifyId: album.spotifyId,
             name: album.name,
             imageUrl: album.imageUrl,
             releaseDate: album.releaseDate,
         },
-        update: {
-            name: album.name,
-            imageUrl: album.imageUrl,
-        },
         select: { id: true },
     });
 
-    // Store in cache
-    ctx?.albumCache.set(album.spotifyId, result.id);
-    return result.id;
+    ctx?.albumCache.set(album.spotifyId, created.id);
+    return created.id;
 }
 
 export async function upsertArtist(

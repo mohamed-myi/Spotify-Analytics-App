@@ -103,7 +103,7 @@ async function backfillArtistImages() {
         await new Promise((r) => setTimeout(r, 50));
     }
 
-    console.log(`\n✅ Artist image backfill complete!`);
+    console.log(`\nArtist image backfill complete!`);
     console.log(`   Updated: ${updated}`);
     console.log(`   Failed/No image: ${failed}`);
     console.log(`   Invalid IDs skipped: ${invalidCount}`);

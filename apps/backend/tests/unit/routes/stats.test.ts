@@ -159,7 +159,7 @@ describe('Stats API', () => {
 
             const response = await app.inject({
                 method: 'GET',
-                url: '/me/stats/top/tracks?range=all',
+                url: '/me/stats/top/tracks?range=year',
             });
 
             expect(response.statusCode).toBe(200);
@@ -177,7 +177,7 @@ describe('Stats API', () => {
 
             const response = await app.inject({
                 method: 'GET',
-                url: '/me/stats/top/tracks?range=all',
+                url: '/me/stats/top/tracks?range=year',
             });
 
             expect(response.statusCode).toBe(200);
@@ -195,7 +195,7 @@ describe('Stats API', () => {
 
             expect(response.statusCode).toBe(200);
             expect(redis.setex).toHaveBeenCalledWith(
-                'stats:tracks:user-1:medium_term:rank',
+                'stats:tracks:user-1:6months:rank',
                 300,
                 expect.any(String)
             );
@@ -224,7 +224,7 @@ describe('Stats API', () => {
 
             expect(prisma.userTrackStats.findMany).toHaveBeenCalled();
             expect(redis.setex).toHaveBeenCalledWith(
-                'stats:tracks:user-1:short_term:time', // default range is 4weeks -> short_term
+                'stats:tracks:user-1:4weeks:time',
                 300,
                 expect.any(String)
             );
@@ -247,7 +247,7 @@ describe('Stats API', () => {
 
             const response = await app.inject({
                 method: 'GET',
-                url: '/me/stats/top/artists?range=all',
+                url: '/me/stats/top/artists?range=year',
             });
 
             expect(response.statusCode).toBe(200);
@@ -282,7 +282,7 @@ describe('Stats API', () => {
             });
 
             expect(redis.setex).toHaveBeenCalledWith(
-                'stats:artists:user-1:short_term',
+                'stats:artists:user-1:4weeks',
                 300,
                 expect.any(String)
             );

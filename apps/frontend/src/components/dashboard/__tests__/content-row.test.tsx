@@ -4,8 +4,9 @@ import { ContentRow } from '../content-row'
 
 // Mock lucide-react icons
 jest.mock('lucide-react', () => ({
-    ChevronLeft: () => <span data-testid="chevron-left">←</span>,
-    ChevronRight: () => <span data-testid="chevron-right">→</span>
+    ChevronLeft: () => <span data-testid="chevron-left">Left</span>,
+    ChevronRight: () => <span data-testid="chevron-right">Right</span>,
+    RefreshCw: () => <span data-testid="refresh-cw">Refresh</span>
 }))
 
 const mockArtistItems = [
@@ -116,11 +117,11 @@ describe('ContentRow', () => {
                     items={mockArtistItems}
                     type="artist"
                     showTimeRange={true}
-                    selectedRange="all"
+                    selectedRange="year"
                 />
             )
 
-            expect(screen.getByText('All Time')).toBeInTheDocument()
+            expect(screen.getByText('Last 1 Year')).toBeInTheDocument()
         })
 
         it('hides time range when showTimeRange is false', () => {
@@ -133,7 +134,7 @@ describe('ContentRow', () => {
                 />
             )
 
-            expect(screen.queryByText('All Time')).not.toBeInTheDocument()
+            expect(screen.queryByText('Last 1 Year')).not.toBeInTheDocument()
         })
 
         it('opens dropdown on click', () => {
@@ -143,12 +144,12 @@ describe('ContentRow', () => {
                     items={mockArtistItems}
                     type="artist"
                     showTimeRange={true}
-                    selectedRange="all"
+                    selectedRange="year"
                     onRangeChange={jest.fn()}
                 />
             )
 
-            fireEvent.click(screen.getByText('All Time'))
+            fireEvent.click(screen.getByText('Last 1 Year'))
 
             expect(screen.getByText('Last 4 Weeks')).toBeInTheDocument()
             expect(screen.getByText('Last 6 Months')).toBeInTheDocument()
@@ -163,13 +164,13 @@ describe('ContentRow', () => {
                     items={mockArtistItems}
                     type="artist"
                     showTimeRange={true}
-                    selectedRange="all"
+                    selectedRange="year"
                     onRangeChange={mockOnRangeChange}
                 />
             )
 
             // Open dropdown
-            fireEvent.click(screen.getByText('All Time'))
+            fireEvent.click(screen.getByText('Last 1 Year'))
             // Select new option
             fireEvent.click(screen.getByText('Last 4 Weeks'))
 

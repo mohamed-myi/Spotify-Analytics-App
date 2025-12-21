@@ -16,17 +16,27 @@ import { createSyncContext } from '../types/ingestion';
 import { workerLoggers } from '../lib/logger';
 import { setSyncWorkerRunning } from './worker-status';
 import { DEFAULT_JOB_OPTIONS } from './worker-config';
+import { syncUserQueue } from './queues';
 
 const log = workerLoggers.sync;
 
 export interface SyncUserJob {
     userId: string;
+    skipCooldown?: boolean;  // Bypass 5-min cooldown for follow-up syncs
+    iteration?: number;      // Track follow-up iterations to prevent runaway
 }
 
 const SYNC_COOLDOWN_MS = 5 * 60 * 1000;
+const MAX_FOLLOWUP_ITERATIONS = 5;  // Dead man's switch: max follow-ups per cron cycle
 
 async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
-    const { userId } = job.data;
+    const { userId, skipCooldown, iteration = 0 } = job.data;
+
+    // Dead man's switch: stop if max iterations reached
+    if (iteration >= MAX_FOLLOWUP_ITERATIONS) {
+        await job.log(`Max iterations (${MAX_FOLLOWUP_ITERATIONS}) reached, stopping until next cron`);
+        return { added: 0, skipped: 0, updated: 0, errors: 0 };
+    }
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -34,8 +44,10 @@ async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
     });
 
     const userTimezone = user?.settings?.timezone ?? 'UTC';
+    const lastSyncTimestamp = user?.lastIngestedAt?.getTime();
 
-    if (user?.lastIngestedAt) {
+    // Cooldown check (skipped for follow-up syncs)
+    if (!skipCooldown && user?.lastIngestedAt) {
         const msSinceLastSync = Date.now() - user.lastIngestedAt.getTime();
         if (msSinceLastSync < SYNC_COOLDOWN_MS) {
             await job.log(`Skipping - synced ${Math.round(msSinceLastSync / 1000)}s ago`);
@@ -100,6 +112,26 @@ async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
 
         // Reset failure count on successful sync
         await resetTokenFailures(userId);
+
+        // Adaptive re-queue: if it hit the 50-item limit and made temporal progress
+        const hitLimit = response.items.length === 50;
+        const oldestTrackInBatch = events[events.length - 1]?.playedAt;
+        const madeTemporalProgress = oldestTrackInBatch &&
+            (!lastSyncTimestamp || oldestTrackInBatch.getTime() > lastSyncTimestamp);
+
+        if (hitLimit && madeTemporalProgress) {
+            // Jittered delay (1-6 seconds) to prevent collapse
+            const jitteredDelay = 1000 + Math.floor(Math.random() * 5000);
+            await syncUserQueue.add(
+                `sync-${userId}-followup-${iteration + 1}`,
+                { userId, skipCooldown: true, iteration: iteration + 1 },
+                { priority: 1, delay: jitteredDelay }
+            );
+            await job.log(
+                `Hit 50-item limit with temporal progress, queued follow-up ` +
+                `(iteration ${iteration + 1}/${MAX_FOLLOWUP_ITERATIONS}, delay ${jitteredDelay}ms)`
+            );
+        }
 
         return summary;
     } catch (error) {

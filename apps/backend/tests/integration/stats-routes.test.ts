@@ -36,6 +36,18 @@ jest.mock('../../src/workers/queues', () => ({
     importQueue: { add: jest.fn() },
 }));
 
+// Mock top-stats-queue
+jest.mock('../../src/workers/top-stats-queue', () => ({
+    topStatsQueue: {
+        add: jest.fn().mockResolvedValue({}),
+    },
+}));
+
+// Mock top-stats-service
+jest.mock('../../src/services/top-stats-service', () => ({
+    triggerLazyRefreshIfStale: jest.fn().mockResolvedValue({ queued: false, staleHours: 0 }),
+}));
+
 // Mock Prisma
 const mockPrisma = {
     userTrackStats: {

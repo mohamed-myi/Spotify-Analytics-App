@@ -25,6 +25,7 @@ jest.mock('@/lib/prisma', () => ({
     prisma: {
         user: { upsert: jest.fn(), findUnique: jest.fn() },
         userSettings: { upsert: jest.fn() },
+        importJob: { findFirst: jest.fn() },
     },
 }));
 
