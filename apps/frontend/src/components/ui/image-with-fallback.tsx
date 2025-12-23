@@ -1,5 +1,9 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+// This component intentionally uses native <img> for onError fallback handling,
+// which is not supported by Next.js Image component.
+
 import React, { useState } from 'react';
 
 const ERROR_IMG_SRC =

@@ -2,7 +2,7 @@
 
 import { AppLayout } from "@/components/layout/app-layout";
 import { useInfiniteHistory, MappedHistoryItem } from "@/hooks/use-dashboard";
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { ItemModal } from "@/components/dashboard/item-modal";
 import Image from "next/image";
 import { PageTitle } from "@/components/dashboard/page-title";
@@ -305,7 +305,7 @@ export default function HistoryPage() {
                             {/* End of history indicator */}
                             {!hasMore && history && history.length > 0 && (
                                 <div className="text-center py-8">
-                                    <p className="text-white/40 text-sm">You've reached the end of your history</p>
+                                    <p className="text-white/40 text-sm">You&apos;ve reached the end of your history</p>
                                 </div>
                             )}
                         </div>

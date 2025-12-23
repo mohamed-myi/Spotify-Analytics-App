@@ -67,7 +67,6 @@ describe('useUser Hook', () => {
 
 describe('useTopArtists Hook', () => {
     it('maps Spotify top artists data correctly', () => {
-        // Backend now returns Spotify's actual top artists with rank
         const mockBackendData = [
             {
                 id: 'a1',

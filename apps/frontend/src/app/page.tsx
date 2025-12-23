@@ -69,10 +69,13 @@ export default function LandingPage() {
                     />
                   ) : (
                     // MYI Logo - retained
-                    <img
+                    <Image
                       src="/brand/myi-logo.svg"
                       alt="MYI"
+                      width={160}
+                      height={160}
                       className="w-full h-full p-4"
+                      unoptimized
                     />
                   )}
                 </div>

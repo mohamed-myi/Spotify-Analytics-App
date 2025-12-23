@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import React from 'react'
 import { render, screen } from '@testing-library/react'
 import { ProfileHeader } from '../profile-header'

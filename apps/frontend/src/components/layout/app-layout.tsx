@@ -91,21 +91,16 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                         transition={{ duration: 0.5, ease: "easeInOut" }}
                     >
                         {/* 
-                            Using native img with explicit viewport-based sizing instead of Next.js Image
-                            This ensures consistent full-coverage on all screen sizes/aspect ratios
+                            Background image with Next.js Image for optimization
                         */}
-                        <img
+                        <Image
                             src={backgroundImage}
                             alt="Background"
-                            style={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                width: '100vw',
-                                height: '100vh',
-                                objectFit: 'cover',
-                                objectPosition: 'center 20%', // Focus on upper portion where faces typically are
-                            }}
+                            fill
+                            priority
+                            className="object-cover"
+                            style={{ objectPosition: 'center 20%' }}
+                            unoptimized
                         />
                         {/* Gradient overlays for readability - lighter opacity */}
                         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black" />
@@ -131,7 +126,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                             href="/dashboard"
                             className="absolute left-4 md:left-6 flex items-center justify-center w-10 h-10 rounded-full overflow-hidden hover:opacity-80 transition-opacity shadow-lg shadow-purple-500/30"
                         >
-                            <img src="/brand/myi-logo.svg" alt="MYI" className="w-full h-full" />
+                            <Image src="/brand/myi-logo.svg" alt="MYI" width={40} height={40} className="w-full h-full" unoptimized />
                         </Link>
 
                         {/* Desktop Nav Links - True Center */}
