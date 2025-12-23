@@ -1,4 +1,5 @@
 import useSWR from "swr";
+import useSWRInfinite from "swr/infinite";
 import { fetcher, api } from "@/lib/api";
 import { UserProfile } from "@/lib/types";
 
@@ -127,6 +128,81 @@ export function useRecentHistory(limit: number = 50) {
     return {
         history: mappedData,
         isLoading,
+        isError: error
+    };
+}
+
+// Paginated history response includes total count
+interface PaginatedHistoryResponse {
+    events: HistoryEvent[];
+    total: number;
+    page: number;
+    limit: number;
+}
+
+// Mapped history item type
+export interface MappedHistoryItem {
+    id: string;
+    spotifyId: string;
+    name: string;
+    artist: string;
+    artistSpotifyId?: string;
+    image: string;
+    playedAt: string;
+}
+
+export function useInfiniteHistory(pageSize: number = 100) {
+    const getKey = (pageIndex: number, previousPageData: PaginatedHistoryResponse | null) => {
+        // Reached the end - no more data
+        if (previousPageData && previousPageData.events.length === 0) return null;
+        // First page or subsequent pages
+        return `/me/history?page=${pageIndex + 1}&limit=${pageSize}`;
+    };
+
+    const { data, error, isLoading, isValidating, size, setSize } = useSWRInfinite<PaginatedHistoryResponse>(
+        getKey,
+        fetcher,
+        {
+            revalidateFirstPage: false,
+            revalidateOnFocus: false,
+            persistSize: true,
+        }
+    );
+
+    // Flatten all pages into a single array
+    const allEvents = data ? data.flatMap(page => page.events) : [];
+
+    // Map to frontend format
+    const history: MappedHistoryItem[] = allEvents.map((event) => ({
+        id: event.id,
+        spotifyId: event.track.spotifyId,
+        name: event.track.name,
+        artist: event.track.artists?.[0]?.artist?.name || "Unknown",
+        artistSpotifyId: event.track.artists?.[0]?.artist?.spotifyId,
+        image: event.track.album?.imageUrl || "",
+        playedAt: event.playedAt
+    }));
+
+    // Determine if there are more pages
+    const total = data?.[0]?.total ?? 0;
+    const hasMore = history.length < total;
+
+    // Loading more (not initial load)
+    const isLoadingMore = isLoading || (size > 0 && data && typeof data[size - 1] === "undefined");
+
+    const loadMore = () => {
+        if (!isLoadingMore && hasMore) {
+            setSize(size + 1);
+        }
+    };
+
+    return {
+        history,
+        total,
+        isLoading,
+        isLoadingMore: isValidating && size > 1,
+        hasMore,
+        loadMore,
         isError: error
     };
 }

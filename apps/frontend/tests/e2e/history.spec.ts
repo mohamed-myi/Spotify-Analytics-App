@@ -27,7 +27,10 @@ test.describe('History Page', () => {
                         },
                         playedAt: now.toISOString()
                     }
-                ]
+                ],
+                total: 1,
+                page: 1,
+                limit: 100
             })
         }))
 
@@ -42,7 +45,7 @@ test.describe('History Page', () => {
         await page.route('**/me/history**', route => route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ events: [] })
+            body: JSON.stringify({ events: [], total: 0, page: 1, limit: 100 })
         }))
 
         await page.goto('/dashboard/history')
@@ -58,7 +61,10 @@ test.describe('History Page', () => {
                 events: [
                     { id: 'e1', track: { name: 'Track 1', artists: [{ artist: { name: 'Artist 1' } }], album: { images: [{ url: 'https://example.com/t1.jpg' }] } }, playedAt: new Date().toISOString() },
                     { id: 'e2', track: { name: 'Track 2', artists: [{ artist: { name: 'Artist 2' } }], album: { images: [{ url: 'https://example.com/t2.jpg' }] } }, playedAt: new Date().toISOString() }
-                ]
+                ],
+                total: 2,
+                page: 1,
+                limit: 100
             })
         }))
 
