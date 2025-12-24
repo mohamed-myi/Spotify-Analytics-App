@@ -9,6 +9,40 @@ export interface AggregationInput {
     msPlayed: number;
 }
 
+interface StatsAccumulator {
+    count: number;
+    ms: number;
+}
+
+type AggregationMap<K> = Map<K, StatsAccumulator>;
+
+/**
+ * Aggregate events by key into a map.
+ * @param events
+ * @param getKeys
+ * @param onMatch - Optional callback for custom logic on existing entries
+ */
+function aggregateByKey<K>(
+    events: AggregationInput[],
+    getKeys: (event: AggregationInput) => K[],
+    onMatch?: (existing: StatsAccumulator, event: AggregationInput) => void
+): AggregationMap<K> {
+    const map = new Map<K, StatsAccumulator>();
+    for (const event of events) {
+        for (const key of getKeys(event)) {
+            const existing = map.get(key);
+            if (existing) {
+                existing.count++;
+                existing.ms += event.msPlayed;
+                if (onMatch) onMatch(existing, event);
+            } else {
+                map.set(key, { count: 1, ms: event.msPlayed });
+            }
+        }
+    }
+    return map;
+}
+
 export async function updateStatsForEvents(
     userId: string,
     events: AggregationInput[],
@@ -72,19 +106,7 @@ async function updateArtistStats(
     userId: string,
     events: AggregationInput[]
 ): Promise<void> {
-    const artistMap = new Map<string, { count: number; ms: number }>();
-
-    for (const event of events) {
-        for (const artistId of event.artistIds) {
-            const existing = artistMap.get(artistId);
-            if (existing) {
-                existing.count++;
-                existing.ms += event.msPlayed;
-            } else {
-                artistMap.set(artistId, { count: 1, ms: event.msPlayed });
-            }
-        }
-    }
+    const artistMap = aggregateByKey(events, (e) => e.artistIds);
 
     const upserts = Array.from(artistMap.entries()).map(([artistId, stats]) =>
         prisma.userArtistStats.upsert({
@@ -161,18 +183,7 @@ async function updateHourStats(
     userId: string,
     events: AggregationInput[]
 ): Promise<void> {
-    const hourMap = new Map<number, { count: number; ms: number }>();
-
-    for (const event of events) {
-        const hour = event.playedAt.getUTCHours();
-        const existing = hourMap.get(hour);
-        if (existing) {
-            existing.count++;
-            existing.ms += event.msPlayed;
-        } else {
-            hourMap.set(hour, { count: 1, ms: event.msPlayed });
-        }
-    }
+    const hourMap = aggregateByKey(events, (e) => [e.playedAt.getUTCHours()]);
 
     const upserts = Array.from(hourMap.entries()).map(([hour, stats]) =>
         prisma.userHourStats.upsert({
