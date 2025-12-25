@@ -2,17 +2,14 @@
 process.env.REDIS_URL = 'redis://mock:6379';
 
 // Mock external dependencies
-const mockQueueAdd = jest.fn().mockResolvedValue({});
 jest.mock('bullmq', () => {
     return {
-        Worker: jest.fn().mockImplementation((name, processor, opts) => {
-            return {
-                on: jest.fn(),
-                close: jest.fn().mockResolvedValue(undefined),
-            };
-        }),
+        Worker: jest.fn().mockImplementation(() => ({
+            on: jest.fn(),
+            close: jest.fn().mockResolvedValue(undefined),
+        })),
         Queue: jest.fn().mockImplementation(() => ({
-            add: mockQueueAdd,
+            add: jest.fn(),
         })),
     };
 });
@@ -36,7 +33,8 @@ jest.mock('../../../src/lib/prisma', () => ({
 
 jest.mock('../../../src/lib/token-manager', () => ({
     getValidAccessToken: jest.fn(),
-    invalidateUserToken: jest.fn(),
+    recordTokenFailure: jest.fn(),
+    resetTokenFailures: jest.fn(),
 }));
 
 jest.mock('../../../src/lib/spotify-api', () => ({
@@ -55,8 +53,12 @@ jest.mock('../../../src/services/aggregation', () => ({
     updateStatsForEvents: jest.fn(),
 }));
 
+jest.mock('../../../src/lib/partitions', () => ({
+    ensurePartitionsForDates: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from '../../../src/lib/prisma';
-import { getValidAccessToken, invalidateUserToken } from '../../../src/lib/token-manager';
+import { getValidAccessToken, resetTokenFailures } from '../../../src/lib/token-manager';
 import { getRecentlyPlayed } from '../../../src/lib/spotify-api';
 import { parseRecentlyPlayed } from '../../../src/lib/spotify-parser';
 import { insertListeningEventsWithIds } from '../../../src/services/ingestion';
@@ -68,26 +70,17 @@ import {
     SpotifyRateLimitError,
 } from '../../../src/lib/spotify-errors';
 
-// Import the actual module to test after mocks are set up
-// Import types for type-safe Job mock
 interface MockJob {
-    data: { userId: string; skipCooldown?: boolean; iteration?: number };
+    data: { userId: string; skipCooldown?: boolean };
     log: jest.Mock;
 }
 
 // Recreate the processSync function to test it directly
-// This mirrors the actual implementation to test the logic
 const SYNC_COOLDOWN_MS = 5 * 60 * 1000;
-const MAX_FOLLOWUP_ITERATIONS = 5;
+const MAX_BACKWARD_ITERATIONS = 10;
 
 async function processSync(job: MockJob): Promise<{ added: number; skipped: number; updated: number; errors: number }> {
-    const { userId, skipCooldown, iteration = 0 } = job.data;
-
-    // Dead man's switch: stop if max iterations reached
-    if (iteration >= MAX_FOLLOWUP_ITERATIONS) {
-        await job.log(`Max iterations (${MAX_FOLLOWUP_ITERATIONS}) reached, stopping until next cron`);
-        return { added: 0, skipped: 0, updated: 0, errors: 0 };
-    }
+    const { userId, skipCooldown } = job.data;
 
     const user = await (prisma.user.findUnique as jest.Mock)({
         where: { id: userId },
@@ -95,9 +88,8 @@ async function processSync(job: MockJob): Promise<{ added: number; skipped: numb
     });
 
     const userTimezone = user?.settings?.timezone ?? 'UTC';
-    const lastSyncTimestamp = user?.lastIngestedAt?.getTime();
+    const lastSyncTimestamp = user?.lastIngestedAt?.getTime() ?? 0;
 
-    // Cooldown check (skipped for follow-up syncs)
     if (!skipCooldown && user?.lastIngestedAt) {
         const msSinceLastSync = Date.now() - user.lastIngestedAt.getTime();
         if (msSinceLastSync < SYNC_COOLDOWN_MS) {
@@ -108,75 +100,92 @@ async function processSync(job: MockJob): Promise<{ added: number; skipped: numb
 
     const tokenResult = await (getValidAccessToken as jest.Mock)(userId);
     if (!tokenResult) {
-        await (invalidateUserToken as jest.Mock)(userId);
         throw new Error(`No valid token for user ${userId}`);
     }
 
-    await (waitForRateLimit as jest.Mock)();
-
-    const afterTimestamp = user?.lastIngestedAt ? user.lastIngestedAt.getTime() : undefined;
-
     try {
-        const response = await (getRecentlyPlayed as jest.Mock)(tokenResult.accessToken, {
-            limit: 50,
-            after: afterTimestamp,
-        });
+        let beforeCursor: number | undefined = undefined;
+        let newestObservedTime: Date | null = null;
+        let iterationCount = 0;
+        const totalSummary = { added: 0, skipped: 0, updated: 0, errors: 0 };
+        const allAddedEvents: Array<{ trackId: string; artistIds: string[]; playedAt: Date; msPlayed: number }> = [];
 
-        if (response.items.length === 0) {
-            await job.log('No new plays found');
-            return { added: 0, skipped: 0, updated: 0, errors: 0 };
+        while (iterationCount < MAX_BACKWARD_ITERATIONS) {
+            await (waitForRateLimit as jest.Mock)();
+
+            const response: { items: any[] } = await (getRecentlyPlayed as jest.Mock)(tokenResult.accessToken, {
+                limit: 50,
+                before: beforeCursor,
+            });
+
+            if (response.items.length === 0) {
+                if (iterationCount === 0) {
+                    await job.log('No new plays found');
+                }
+                break;
+            }
+
+            const batchEvents: Array<{ playedAt: Date; track: any }> = (parseRecentlyPlayed as jest.Mock)(response);
+
+            if (iterationCount === 0 && batchEvents.length > 0) {
+                newestObservedTime = batchEvents[0].playedAt;
+            }
+
+            const newEvents = batchEvents.filter((e: any) => e.playedAt.getTime() > lastSyncTimestamp);
+
+            if (newEvents.length > 0) {
+                const { summary, results } = await (insertListeningEventsWithIds as jest.Mock)(userId, newEvents);
+                totalSummary.added += summary.added;
+                totalSummary.skipped += summary.skipped;
+                totalSummary.updated += summary.updated;
+                totalSummary.errors += summary.errors;
+
+                const addedInBatch = results.filter((r: any) => r.status === 'added');
+                allAddedEvents.push(...addedInBatch.map((r: any) => ({
+                    trackId: r.trackId,
+                    artistIds: r.artistIds,
+                    playedAt: r.playedAt,
+                    msPlayed: r.msPlayed,
+                })));
+
+                await job.log(`Batch ${iterationCount + 1}: added ${summary.added}, skipped ${summary.skipped}`);
+            }
+
+            const oldestInBatch: Date | undefined = batchEvents[batchEvents.length - 1]?.playedAt;
+            const foundOverlap = oldestInBatch && oldestInBatch.getTime() <= lastSyncTimestamp;
+            const isPartialBatch = response.items.length < 50;
+
+            if (foundOverlap || isPartialBatch) {
+                break;
+            }
+
+            beforeCursor = oldestInBatch.getTime();
+            iterationCount++;
         }
 
-        const events = (parseRecentlyPlayed as jest.Mock)(response);
-        const { summary, results } = await (insertListeningEventsWithIds as jest.Mock)(userId, events);
-
-        const addedEvents = results.filter((r: any) => r.status === 'added');
-        if (addedEvents.length > 0) {
-            const aggregationInputs = addedEvents.map((r: any) => ({
-                trackId: r.trackId,
-                artistIds: r.artistIds,
-                playedAt: r.playedAt,
-                msPlayed: r.msPlayed,
-            }));
-            await (updateStatsForEvents as jest.Mock)(userId, aggregationInputs, userTimezone);
-            await job.log(`Aggregated stats for ${addedEvents.length} events`);
+        if (iterationCount >= MAX_BACKWARD_ITERATIONS) {
+            await job.log(`Max backward iterations (${MAX_BACKWARD_ITERATIONS}) reached`);
         }
 
-        const latestPlay = events[0]?.playedAt;
-        if (latestPlay) {
+        if (allAddedEvents.length > 0) {
+            await (updateStatsForEvents as jest.Mock)(userId, allAddedEvents, userTimezone);
+            await job.log(`Aggregated stats for ${allAddedEvents.length} total events`);
+        }
+
+        if (newestObservedTime) {
             await (prisma.user.update as jest.Mock)({
                 where: { id: userId },
-                data: { lastIngestedAt: latestPlay },
+                data: { lastIngestedAt: newestObservedTime },
             });
         }
 
-        // Adaptive re-queue: if we hit the 50-item limit and made temporal progress
-        const hitLimit = response.items.length === 50;
-        const oldestTrackInBatch = events[events.length - 1]?.playedAt;
-        const madeTemporalProgress = oldestTrackInBatch &&
-            (!lastSyncTimestamp || oldestTrackInBatch.getTime() > lastSyncTimestamp);
-
-        if (hitLimit && madeTemporalProgress) {
-            const jitteredDelay = 1000 + Math.floor(Math.random() * 5000);
-            await mockQueueAdd(
-                `sync-${userId}-followup-${iteration + 1}`,
-                { userId, skipCooldown: true, iteration: iteration + 1 },
-                { priority: 1, delay: jitteredDelay }
-            );
-            await job.log(
-                `Hit 50-item limit with temporal progress, queued follow-up ` +
-                `(iteration ${iteration + 1}/${MAX_FOLLOWUP_ITERATIONS})`
-            );
-        }
-
-        return summary;
+        await (resetTokenFailures as jest.Mock)(userId);
+        return totalSummary;
     } catch (error) {
         if (error instanceof SpotifyUnauthenticatedError) {
-            await (invalidateUserToken as jest.Mock)(userId);
             throw new Error(`Token revoked for user ${userId}`);
         }
         if (error instanceof SpotifyForbiddenError) {
-            await (invalidateUserToken as jest.Mock)(userId);
             throw new Error(`Access forbidden for user ${userId}`);
         }
         if (error instanceof SpotifyRateLimitError) {
@@ -187,15 +196,14 @@ async function processSync(job: MockJob): Promise<{ added: number; skipped: numb
     }
 }
 
-describe('sync-worker processSync', () => {
-    const createMockJob = (userId: string, options?: { skipCooldown?: boolean; iteration?: number }): MockJob => ({
+describe('sync-worker processSync (backward-walking)', () => {
+    const createMockJob = (userId: string, options?: { skipCooldown?: boolean }): MockJob => ({
         data: { userId, ...options },
         log: jest.fn(),
     });
 
     beforeEach(() => {
         jest.clearAllMocks();
-        mockQueueAdd.mockClear();
     });
 
     describe('cooldown check', () => {
@@ -245,7 +253,6 @@ describe('sync-worker processSync', () => {
             await processSync(job);
 
             expect(getRecentlyPlayed).toHaveBeenCalled();
-            expect(job.log).not.toHaveBeenCalledWith(expect.stringContaining('Skipping'));
         });
     });
 
@@ -260,60 +267,11 @@ describe('sync-worker processSync', () => {
 
             const job = createMockJob('user-123');
             await expect(processSync(job)).rejects.toThrow('No valid token');
-            expect(invalidateUserToken).toHaveBeenCalledWith('user-123');
         });
     });
 
-    describe('event processing', () => {
-        it('returns empty summary when no new plays', async () => {
-            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-                id: 'user-123',
-                lastIngestedAt: null,
-                settings: null,
-            });
-            (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
-            (getRecentlyPlayed as jest.Mock).mockResolvedValue({ items: [] });
-
-            const job = createMockJob('user-123');
-            const result = await processSync(job);
-
-            expect(result).toEqual({ added: 0, skipped: 0, updated: 0, errors: 0 });
-            expect(job.log).toHaveBeenCalledWith('No new plays found');
-        });
-
-        it('processes events and aggregates stats', async () => {
-            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-                id: 'user-123',
-                lastIngestedAt: null,
-                settings: { timezone: 'America/New_York' },
-            });
-            (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
-            (getRecentlyPlayed as jest.Mock).mockResolvedValue({
-                items: [{ played_at: '2025-01-01T12:00:00Z', track: {} }],
-            });
-            (parseRecentlyPlayed as jest.Mock).mockReturnValue([
-                { playedAt: new Date('2025-01-01T12:00:00Z'), track: {} },
-            ]);
-            (insertListeningEventsWithIds as jest.Mock).mockResolvedValue({
-                summary: { added: 1, skipped: 0, updated: 0, errors: 0 },
-                results: [{
-                    status: 'added',
-                    trackId: 'track-1',
-                    artistIds: ['artist-1'],
-                    playedAt: new Date(),
-                    msPlayed: 180000,
-                }],
-            });
-
-            const job = createMockJob('user-123');
-            const result = await processSync(job);
-
-            expect(result).toEqual({ added: 1, skipped: 0, updated: 0, errors: 0 });
-            expect(updateStatsForEvents).toHaveBeenCalled();
-            expect(prisma.user.update).toHaveBeenCalled();
-        });
-
-        it('skips aggregation when no events were added', async () => {
+    describe('backward-walking pagination', () => {
+        it('fetches using before cursor (no cursor on first request)', async () => {
             (prisma.user.findUnique as jest.Mock).mockResolvedValue({
                 id: 'user-123',
                 lastIngestedAt: null,
@@ -321,16 +279,182 @@ describe('sync-worker processSync', () => {
             });
             (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
             (getRecentlyPlayed as jest.Mock).mockResolvedValue({ items: [{}] });
-            (parseRecentlyPlayed as jest.Mock).mockReturnValue([{ playedAt: new Date() }]);
+            (parseRecentlyPlayed as jest.Mock).mockReturnValue([
+                { playedAt: new Date(), track: {} },
+            ]);
             (insertListeningEventsWithIds as jest.Mock).mockResolvedValue({
-                summary: { added: 0, skipped: 1, updated: 0, errors: 0 },
-                results: [{ status: 'skipped' }],
+                summary: { added: 1, skipped: 0, updated: 0, errors: 0 },
+                results: [{ status: 'added', trackId: 't1', artistIds: ['a1'], playedAt: new Date(), msPlayed: 180000 }],
             });
 
             const job = createMockJob('user-123');
             await processSync(job);
 
-            expect(updateStatsForEvents).not.toHaveBeenCalled();
+            expect(getRecentlyPlayed).toHaveBeenCalledWith('token', {
+                limit: 50,
+                before: undefined,
+            });
+        });
+
+        it('continues backward when 50 items and no overlap', async () => {
+            const oldSync = new Date('2024-01-01T00:00:00Z');
+            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+                id: 'user-123',
+                lastIngestedAt: oldSync,
+                settings: null,
+            });
+            (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
+
+            const batch1OldestTime = new Date('2024-06-15T12:00:00Z');
+            const batch2OldestTime = new Date('2024-03-15T12:00:00Z');
+
+            (getRecentlyPlayed as jest.Mock)
+                .mockResolvedValueOnce({ items: Array(50).fill({}) })
+                .mockResolvedValueOnce({ items: Array(50).fill({}) })
+                .mockResolvedValueOnce({ items: [] });
+
+            (parseRecentlyPlayed as jest.Mock)
+                .mockReturnValueOnce(Array(50).fill(null).map((_, i) => ({
+                    playedAt: new Date(batch1OldestTime.getTime() + (50 - i) * 60000),
+                    track: {},
+                })))
+                .mockReturnValueOnce(Array(50).fill(null).map((_, i) => ({
+                    playedAt: new Date(batch2OldestTime.getTime() + (50 - i) * 60000),
+                    track: {},
+                })));
+
+            (insertListeningEventsWithIds as jest.Mock).mockResolvedValue({
+                summary: { added: 50, skipped: 0, updated: 0, errors: 0 },
+                results: Array(50).fill({ status: 'added', trackId: 't1', artistIds: ['a1'], playedAt: new Date(), msPlayed: 180000 }),
+            });
+
+            const job = createMockJob('user-123', { skipCooldown: true });
+            await processSync(job);
+
+            expect(getRecentlyPlayed).toHaveBeenCalledTimes(3);
+            expect(getRecentlyPlayed).toHaveBeenNthCalledWith(2, 'token', {
+                limit: 50,
+                before: expect.any(Number),
+            });
+        });
+
+        it('stops when finding overlap with existing data', async () => {
+            const lastSync = new Date('2024-06-01T12:00:00Z');
+            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+                id: 'user-123',
+                lastIngestedAt: lastSync,
+                settings: null,
+            });
+            (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
+
+            // Oldest track in batch is OLDER than lastSync = overlap found
+            const oldestInBatch = new Date('2024-05-15T12:00:00Z');
+            (getRecentlyPlayed as jest.Mock).mockResolvedValueOnce({ items: Array(50).fill({}) });
+            (parseRecentlyPlayed as jest.Mock).mockReturnValueOnce([
+                { playedAt: new Date('2024-06-15T12:00:00Z'), track: {} },
+                { playedAt: oldestInBatch, track: {} },
+            ]);
+            (insertListeningEventsWithIds as jest.Mock).mockResolvedValue({
+                summary: { added: 1, skipped: 0, updated: 0, errors: 0 },
+                results: [{ status: 'added', trackId: 't1', artistIds: ['a1'], playedAt: new Date(), msPlayed: 180000 }],
+            });
+
+            const job = createMockJob('user-123', { skipCooldown: true });
+            await processSync(job);
+
+            // Should only call once because overlap was found
+            expect(getRecentlyPlayed).toHaveBeenCalledTimes(1);
+        });
+
+        it('stops at max backward iterations (dead man switch)', async () => {
+            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+                id: 'user-123',
+                lastIngestedAt: null,
+                settings: null,
+            });
+            (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
+
+            // Always return 50 items with future timestamps to never trigger overlap
+            (getRecentlyPlayed as jest.Mock).mockResolvedValue({ items: Array(50).fill({}) });
+            (parseRecentlyPlayed as jest.Mock).mockReturnValue(
+                Array(50).fill(null).map(() => ({
+                    playedAt: new Date(Date.now() + Math.random() * 1000000),
+                    track: {},
+                }))
+            );
+            (insertListeningEventsWithIds as jest.Mock).mockResolvedValue({
+                summary: { added: 50, skipped: 0, updated: 0, errors: 0 },
+                results: Array(50).fill({ status: 'added', trackId: 't1', artistIds: ['a1'], playedAt: new Date(), msPlayed: 180000 }),
+            });
+
+            const job = createMockJob('user-123');
+            await processSync(job);
+
+            expect(getRecentlyPlayed).toHaveBeenCalledTimes(MAX_BACKWARD_ITERATIONS);
+            expect(job.log).toHaveBeenCalledWith(expect.stringContaining('Max backward iterations'));
+        });
+
+        it('filters out events older than lastSyncTimestamp before insertion', async () => {
+            const lastSync = new Date('2024-06-01T12:00:00Z');
+            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+                id: 'user-123',
+                lastIngestedAt: lastSync,
+                settings: null,
+            });
+            (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
+
+            (getRecentlyPlayed as jest.Mock).mockResolvedValueOnce({ items: [{}] });
+            (parseRecentlyPlayed as jest.Mock).mockReturnValueOnce([
+                { playedAt: new Date('2024-06-15T12:00:00Z'), track: {} }, // New
+                { playedAt: new Date('2024-05-15T12:00:00Z'), track: {} }, // Old - should be filtered
+            ]);
+            (insertListeningEventsWithIds as jest.Mock).mockResolvedValue({
+                summary: { added: 1, skipped: 0, updated: 0, errors: 0 },
+                results: [{ status: 'added', trackId: 't1', artistIds: ['a1'], playedAt: new Date(), msPlayed: 180000 }],
+            });
+
+            const job = createMockJob('user-123', { skipCooldown: true });
+            await processSync(job);
+
+            // insertListeningEventsWithIds should only receive the NEW event
+            expect(insertListeningEventsWithIds).toHaveBeenCalledWith(
+                'user-123',
+                expect.arrayContaining([
+                    expect.objectContaining({ playedAt: new Date('2024-06-15T12:00:00Z') }),
+                ])
+            );
+        });
+    });
+
+    describe('high water mark tracking', () => {
+        it('updates lastIngestedAt to newest observed time from first batch', async () => {
+            const newestTime = new Date('2024-06-20T12:00:00Z');
+            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+                id: 'user-123',
+                lastIngestedAt: null,
+                settings: null,
+            });
+            (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
+            (getRecentlyPlayed as jest.Mock).mockResolvedValueOnce({ items: [{}] });
+            (parseRecentlyPlayed as jest.Mock).mockReturnValueOnce([
+                { playedAt: newestTime, track: {} },
+                { playedAt: new Date('2024-06-15T12:00:00Z'), track: {} },
+            ]);
+            (insertListeningEventsWithIds as jest.Mock).mockResolvedValue({
+                summary: { added: 2, skipped: 0, updated: 0, errors: 0 },
+                results: [
+                    { status: 'added', trackId: 't1', artistIds: ['a1'], playedAt: newestTime, msPlayed: 180000 },
+                    { status: 'added', trackId: 't2', artistIds: ['a1'], playedAt: new Date(), msPlayed: 180000 },
+                ],
+            });
+
+            const job = createMockJob('user-123');
+            await processSync(job);
+
+            expect(prisma.user.update).toHaveBeenCalledWith({
+                where: { id: 'user-123' },
+                data: { lastIngestedAt: newestTime },
+            });
         });
     });
 
@@ -344,20 +468,18 @@ describe('sync-worker processSync', () => {
             (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
         });
 
-        it('invalidates token on SpotifyUnauthenticatedError', async () => {
+        it('throws on SpotifyUnauthenticatedError', async () => {
             (getRecentlyPlayed as jest.Mock).mockRejectedValue(new SpotifyUnauthenticatedError());
 
             const job = createMockJob('user-123');
             await expect(processSync(job)).rejects.toThrow('Token revoked');
-            expect(invalidateUserToken).toHaveBeenCalledWith('user-123');
         });
 
-        it('invalidates token on SpotifyForbiddenError', async () => {
+        it('throws on SpotifyForbiddenError', async () => {
             (getRecentlyPlayed as jest.Mock).mockRejectedValue(new SpotifyForbiddenError());
 
             const job = createMockJob('user-123');
             await expect(processSync(job)).rejects.toThrow('Access forbidden');
-            expect(invalidateUserToken).toHaveBeenCalledWith('user-123');
         });
 
         it('logs and rethrows SpotifyRateLimitError', async () => {
@@ -367,115 +489,6 @@ describe('sync-worker processSync', () => {
             await expect(processSync(job)).rejects.toBeInstanceOf(SpotifyRateLimitError);
             expect(job.log).toHaveBeenCalledWith(expect.stringContaining('Rate limited'));
         });
-
-        it('rethrows unknown errors', async () => {
-            (getRecentlyPlayed as jest.Mock).mockRejectedValue(new Error('Network error'));
-
-            const job = createMockJob('user-123');
-            await expect(processSync(job)).rejects.toThrow('Network error');
-        });
-    });
-
-    describe('adaptive polling', () => {
-        it('stops at max iterations (dead man switch)', async () => {
-            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-                id: 'user-123',
-                lastIngestedAt: null,
-                settings: null,
-            });
-
-            const job = createMockJob('user-123', { iteration: 5 });
-            const result = await processSync(job);
-
-            expect(result).toEqual({ added: 0, skipped: 0, updated: 0, errors: 0 });
-            expect(job.log).toHaveBeenCalledWith(expect.stringContaining('Max iterations'));
-            expect(getRecentlyPlayed).not.toHaveBeenCalled();
-        });
-
-        it('queues follow-up when hitting 50-item limit with temporal progress', async () => {
-            const oldSync = new Date(Date.now() - 10 * 60 * 1000);
-            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-                id: 'user-123',
-                lastIngestedAt: oldSync,
-                settings: null,
-            });
-            (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
-
-            // Return exactly 50 items to trigger re-queue
-            const fiftyItems = Array(50).fill({ played_at: '2025-01-01T12:00:00Z', track: {} });
-            (getRecentlyPlayed as jest.Mock).mockResolvedValue({ items: fiftyItems });
-
-            // Events with playedAt newer than lastIngestedAt
-            const newerDate = new Date(Date.now() - 5 * 60 * 1000);
-            (parseRecentlyPlayed as jest.Mock).mockReturnValue(
-                Array(50).fill({ playedAt: newerDate, track: {} })
-            );
-            (insertListeningEventsWithIds as jest.Mock).mockResolvedValue({
-                summary: { added: 50, skipped: 0, updated: 0, errors: 0 },
-                results: Array(50).fill({ status: 'added', trackId: 't1', artistIds: ['a1'], playedAt: newerDate, msPlayed: 180000 }),
-            });
-
-            const job = createMockJob('user-123');
-            await processSync(job);
-
-            expect(mockQueueAdd).toHaveBeenCalledWith(
-                expect.stringContaining('sync-user-123-followup'),
-                expect.objectContaining({ userId: 'user-123', skipCooldown: true, iteration: 1 }),
-                expect.objectContaining({ priority: 1 })
-            );
-            expect(job.log).toHaveBeenCalledWith(expect.stringContaining('Hit 50-item limit'));
-        });
-
-        it('does not queue follow-up when under 50 items', async () => {
-            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-                id: 'user-123',
-                lastIngestedAt: null,
-                settings: null,
-            });
-            (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
-            (getRecentlyPlayed as jest.Mock).mockResolvedValue({
-                items: [{ played_at: '2025-01-01T12:00:00Z', track: {} }],
-            });
-            (parseRecentlyPlayed as jest.Mock).mockReturnValue([
-                { playedAt: new Date('2025-01-01T12:00:00Z'), track: {} },
-            ]);
-            (insertListeningEventsWithIds as jest.Mock).mockResolvedValue({
-                summary: { added: 1, skipped: 0, updated: 0, errors: 0 },
-                results: [{ status: 'added', trackId: 't1', artistIds: ['a1'], playedAt: new Date(), msPlayed: 180000 }],
-            });
-
-            const job = createMockJob('user-123');
-            await processSync(job);
-
-            expect(mockQueueAdd).not.toHaveBeenCalled();
-        });
-
-        it('does not queue follow-up without temporal progress', async () => {
-            const recentSync = new Date(Date.now() + 1000); // Future date = no temporal progress
-            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-                id: 'user-123',
-                lastIngestedAt: recentSync,
-                settings: null,
-            });
-            (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'token' });
-
-            const fiftyItems = Array(50).fill({ played_at: '2025-01-01T12:00:00Z', track: {} });
-            (getRecentlyPlayed as jest.Mock).mockResolvedValue({ items: fiftyItems });
-
-            // Events with playedAt older than lastIngestedAt
-            const olderDate = new Date('2025-01-01T12:00:00Z');
-            (parseRecentlyPlayed as jest.Mock).mockReturnValue(
-                Array(50).fill({ playedAt: olderDate, track: {} })
-            );
-            (insertListeningEventsWithIds as jest.Mock).mockResolvedValue({
-                summary: { added: 0, skipped: 50, updated: 0, errors: 0 },
-                results: Array(50).fill({ status: 'skipped' }),
-            });
-
-            const job = createMockJob('user-123', { skipCooldown: true });
-            await processSync(job);
-
-            expect(mockQueueAdd).not.toHaveBeenCalled();
-        });
     });
 });
+

@@ -17,26 +17,19 @@ import { createSyncContext } from '../types/ingestion';
 import { workerLoggers } from '../lib/logger';
 import { setSyncWorkerRunning } from './worker-status';
 import { DEFAULT_JOB_OPTIONS } from './worker-config';
-import { syncUserQueue } from './queues';
 
 const log = workerLoggers.sync;
 
 export interface SyncUserJob {
     userId: string;
     skipCooldown?: boolean;
-    iteration?: number;
 }
 
 const SYNC_COOLDOWN_MS = 5 * 60 * 1000;
-const MAX_FOLLOWUP_ITERATIONS = 5;  // Dead man's switch: max follow-ups per cron cycle
+const MAX_BACKWARD_ITERATIONS = 10;  // Max backward pages per sync
 
 async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
-    const { userId, skipCooldown, iteration = 0 } = job.data;
-
-    if (iteration >= MAX_FOLLOWUP_ITERATIONS) {
-        await job.log(`Max iterations (${MAX_FOLLOWUP_ITERATIONS}) reached, stopping until next cron`);
-        return { added: 0, skipped: 0, updated: 0, errors: 0 };
-    }
+    const { userId, skipCooldown } = job.data;
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -44,7 +37,7 @@ async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
     });
 
     const userTimezone = user?.settings?.timezone ?? 'UTC';
-    const lastSyncTimestamp = user?.lastIngestedAt?.getTime();
+    const lastSyncTimestamp = user?.lastIngestedAt?.getTime() ?? 0;
 
     if (!skipCooldown && user?.lastIngestedAt) {
         const msSinceLastSync = Date.now() - user.lastIngestedAt.getTime();
@@ -59,85 +52,104 @@ async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
         throw new Error(`No valid token for user ${userId}`);
     }
 
-    await waitForRateLimit();
-
-    const afterTimestamp = user?.lastIngestedAt
-        ? user.lastIngestedAt.getTime()
-        : undefined;
-
     try {
-        const response = await getRecentlyPlayed(tokenResult.accessToken, {
-            limit: 50,
-            after: afterTimestamp,
-        });
+        // Backward pagination - get most recent first, walk backward until overlap
+        let beforeCursor: number | undefined = undefined;
+        let newestObservedTime: Date | null = null;
+        let iterationCount = 0;
+        const totalSummary: SyncSummary = { added: 0, skipped: 0, updated: 0, errors: 0 };
+        const allAddedEvents: Array<{ trackId: string; artistIds: string[]; playedAt: Date; msPlayed: number }> = [];
 
-        if (response.items.length === 0) {
-            await job.log('No new plays found');
-            await resetTokenFailures(userId);
-            return { added: 0, skipped: 0, updated: 0, errors: 0 };
+        while (iterationCount < MAX_BACKWARD_ITERATIONS) {
+            await waitForRateLimit();
+
+            const response = await getRecentlyPlayed(tokenResult.accessToken, {
+                limit: 50,
+                before: beforeCursor,
+            });
+
+            if (response.items.length === 0) {
+                if (iterationCount === 0) {
+                    await job.log('No new plays found');
+                }
+                break;
+            }
+
+            const batchEvents = parseRecentlyPlayed(response);
+
+            // Capture the newestObservedTime from the first item of the first batch
+            if (iterationCount === 0 && batchEvents.length > 0) {
+                newestObservedTime = batchEvents[0].playedAt;
+            }
+
+            // Filter out events we've already ingested (playedAt <= lastSyncTimestamp)
+            const newEvents = batchEvents.filter(e => e.playedAt.getTime() > lastSyncTimestamp);
+
+            if (newEvents.length > 0) {
+                // Ensure partitions exist before inserting
+                await ensurePartitionsForDates(newEvents.map(e => e.playedAt));
+
+                const ctx = createSyncContext();
+                const { summary, results } = await insertListeningEventsWithIds(userId, newEvents, ctx);
+
+                totalSummary.added += summary.added;
+                totalSummary.skipped += summary.skipped;
+                totalSummary.updated += summary.updated;
+                totalSummary.errors += summary.errors;
+
+                const addedInBatch = results.filter(r => r.status === 'added');
+                allAddedEvents.push(...addedInBatch.map(r => ({
+                    trackId: r.trackId,
+                    artistIds: r.artistIds,
+                    playedAt: r.playedAt,
+                    msPlayed: r.msPlayed,
+                })));
+
+                await job.log(
+                    `Batch ${iterationCount + 1}: added ${summary.added}, skipped ${summary.skipped}`
+                );
+            }
+
+            // Check termination conditions
+            const oldestInBatch = batchEvents[batchEvents.length - 1]?.playedAt;
+            const foundOverlap = oldestInBatch && oldestInBatch.getTime() <= lastSyncTimestamp;
+            const isPartialBatch = response.items.length < 50;
+
+            if (foundOverlap || isPartialBatch) {
+                break;
+            }
+
+            // Move cursor backward for next iteration
+            beforeCursor = oldestInBatch.getTime();
+            iterationCount++;
         }
 
-        const events = parseRecentlyPlayed(response);
+        if (iterationCount >= MAX_BACKWARD_ITERATIONS) {
+            await job.log(`Max backward iterations (${MAX_BACKWARD_ITERATIONS}) reached`);
+        }
 
-        // Ensure partitions exist for all event dates before inserting
-        await ensurePartitionsForDates(events.map(e => e.playedAt));
+        // Aggregate stats for all added events
+        if (allAddedEvents.length > 0) {
+            await updateStatsForEvents(userId, allAddedEvents, userTimezone);
+            await job.log(`Aggregated stats for ${allAddedEvents.length} total events`);
+        }
 
-        const ctx = createSyncContext();
-        const { summary, results } = await insertListeningEventsWithIds(userId, events, ctx);
-        await job.log(
-            `Inserted ${summary.added}, skipped ${summary.skipped}, ` +
-            `updated ${summary.updated}, errors ${summary.errors}`
-        );
-
-        const addedEvents = results.filter(r => r.status === 'added');
-
-        // Calculate cursor from max timestamp of successfully added events only
-        const maxAddedTimestamp = addedEvents.length > 0
-            ? new Date(Math.max(...addedEvents.map(e => e.playedAt.getTime())))
-            : null;
-
-        if (addedEvents.length > 0) {
-            const aggregationInputs = addedEvents.map(r => ({
-                trackId: r.trackId,
-                artistIds: r.artistIds,
-                playedAt: r.playedAt,
-                msPlayed: r.msPlayed,
-            }));
-
-            await updateStatsForEvents(userId, aggregationInputs, userTimezone);
-            await job.log(`Aggregated stats for ${addedEvents.length} events`);
-
+        // Update lastIngestedAt to the newest observed time
+        if (newestObservedTime) {
             await prisma.user.update({
                 where: { id: userId },
-                data: { lastIngestedAt: maxAddedTimestamp },
+                data: { lastIngestedAt: newestObservedTime },
             });
         }
 
         await resetTokenFailures(userId);
 
-        const hitLimit = response.items.length === 50;
-        const oldestTrackInBatch = events[events.length - 1]?.playedAt;
-        const madeTemporalProgress = oldestTrackInBatch &&
-            (!lastSyncTimestamp || oldestTrackInBatch.getTime() > lastSyncTimestamp);
+        await job.log(
+            `Sync complete: ${totalSummary.added} added, ${totalSummary.skipped} skipped, ` +
+            `${totalSummary.updated} updated, ${totalSummary.errors} errors`
+        );
 
-        if (hitLimit && madeTemporalProgress) {
-            const jitteredDelay = 1000 + Math.floor(Math.random() * 5000);
-            await syncUserQueue.add(
-                `sync-${userId}-followup-${iteration + 1}`,
-                { userId, skipCooldown: true, iteration: iteration + 1 },
-                {
-                    jobId: `sync-${userId}-${iteration + 1}`,
-                    priority: 1,
-                    delay: jitteredDelay,
-                }
-            );
-            await job.log(
-                `Hit 50-item limit with temporal progress, queued follow-up ` +
-                `(iteration ${iteration + 1}/${MAX_FOLLOWUP_ITERATIONS}, delay ${jitteredDelay}ms)`
-            );
-        }
-
-        return summary;
+        return totalSummary;
     } catch (error) {
         if (error instanceof SpotifyUnauthenticatedError) {
             const invalidated = await recordTokenFailure(userId, 'spotify_401_unauthenticated');
