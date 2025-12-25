@@ -1,9 +1,6 @@
-import { updateStatsForEvents, AggregationInput, getLocalDayBucket } from '@/services/aggregation';
+import { updateStatsForEvents, getLocalDayBucket } from '@/services/aggregation';
 import { prisma } from '@/lib/prisma';
-import { toZonedTime } from 'date-fns-tz';
-import { startOfDay } from 'date-fns';
 
-// Mock Prisma
 jest.mock('@/lib/prisma', () => ({
     prisma: {
         userTrackStats: { upsert: jest.fn() },
@@ -17,7 +14,7 @@ describe('Aggregation Service', () => {
     const userId = 'user-1';
     const playedAt = new Date('2023-10-27T14:30:00Z');
 
-    const events: AggregationInput[] = [
+    const events = [
         {
             trackId: 'track-1',
             artistIds: ['artist-1', 'artist-2'],
@@ -49,7 +46,6 @@ describe('Aggregation Service', () => {
         it('should aggregate track stats correctly', async () => {
             await updateStatsForEvents(userId, events);
 
-            // Should be called once for track-1 with summed counts
             expect(prisma.userTrackStats.upsert).toHaveBeenCalledWith({
                 where: { userId_trackId: { userId, trackId: 'track-1' } },
                 create: expect.objectContaining({

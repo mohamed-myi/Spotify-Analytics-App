@@ -1,3 +1,4 @@
+import { BucketType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { startOfDay } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -16,12 +17,6 @@ interface StatsAccumulator {
 
 type AggregationMap<K> = Map<K, StatsAccumulator>;
 
-/**
- * Aggregate events by key into a map.
- * @param events
- * @param getKeys
- * @param onMatch - Optional callback for custom logic on existing entries
- */
 function aggregateByKey<K>(
     events: AggregationInput[],
     getKeys: (event: AggregationInput) => K[],
@@ -157,13 +152,13 @@ async function updateTimeBucketStats(
             where: {
                 userId_bucketType_bucketDate: {
                     userId,
-                    bucketType: 'DAY',
+                    bucketType: BucketType.DAY,
                     bucketDate: new Date(dayKey),
                 },
             },
             create: {
                 userId,
-                bucketType: 'DAY',
+                bucketType: BucketType.DAY,
                 bucketDate: new Date(dayKey),
                 playCount: stats.count,
                 totalMs: BigInt(stats.ms),
