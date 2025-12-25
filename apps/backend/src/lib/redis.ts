@@ -85,7 +85,7 @@ export async function popTracksForMetadata(count: number): Promise<string[]> {
     return tracks;
 }
 
-// Checks Redis connectivity for health checks.
+// Checks Redis connectivity
 export async function pingRedis(): Promise<boolean> {
     try {
         const result = await redis.ping();
@@ -95,7 +95,8 @@ export async function pingRedis(): Promise<boolean> {
     }
 }
 
-// Helper for caching pattern: Get, Return if cached, Fetch, Set, Return
+// Caching pattern: Get, Return if cached, Fetch, Set, Return
+// Uses BigInt-aware JSON serialization
 export async function getOrSet<T>(
     key: string,
     ttlSeconds: number,
@@ -114,13 +115,17 @@ export async function getOrSet<T>(
 
     // Only cache if data is not null
     if (data !== null && data !== undefined) {
-        await redis.setex(key, ttlSeconds, JSON.stringify(data));
+        // BigInt-aware serializer (same as Fastify global serializer)
+        const serialized = JSON.stringify(data, (_, value) =>
+            typeof value === 'bigint' ? value.toString() : value
+        );
+        await redis.setex(key, ttlSeconds, serialized);
     }
 
     return data;
 }
 
-// Metadata cooldown 24hr lock prevents repeated API calls for same entity
+// Metadata cooldown lock prevents repeated API calls for same entity
 const METADATA_LOCK_TTL = 86400;
 
 export async function tryLockMetadata(
@@ -132,7 +137,6 @@ export async function tryLockMetadata(
     return result === 'OK';
 }
 
-// Close Redis connection
 export async function closeRedis(): Promise<void> {
     await redis.quit();
 }

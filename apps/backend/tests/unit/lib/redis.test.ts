@@ -206,4 +206,37 @@ describe('lib/redis', () => {
             expect(mockQuit).toHaveBeenCalled();
         });
     });
+
+    describe('BigInt serialization', () => {
+        it('serializes BigInt values to strings for JSON compatibility', () => {
+            const data = {
+                totalListeningMs: 3600000n,
+                totalPlays: 100,
+            };
+
+            // The real getOrSet uses this serializer
+            const serializer = (_: string, value: unknown) =>
+                typeof value === 'bigint' ? value.toString() : value;
+
+            const serialized = JSON.stringify(data, serializer);
+            const parsed = JSON.parse(serialized);
+
+            expect(parsed.totalListeningMs).toBe('3600000');
+            expect(parsed.totalPlays).toBe(100);
+        });
+
+        it('preserves BigInt precision for large values', () => {
+            const largeValue = 9007199254740993n; // > Number.MAX_SAFE_INTEGER
+
+            const serializer = (_: string, value: unknown) =>
+                typeof value === 'bigint' ? value.toString() : value;
+
+            const serialized = JSON.stringify({ value: largeValue }, serializer);
+            const parsed = JSON.parse(serialized);
+
+            expect(parsed.value).toBe('9007199254740993');
+            // Converting back preserves precision
+            expect(BigInt(parsed.value)).toBe(largeValue);
+        });
+    });
 });

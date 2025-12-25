@@ -28,3 +28,44 @@ export const toJSON = (data: any): any => {
 
     return data;
 };
+
+// Safely convert incoming data (number, string, or BigInt) to BigInt.
+// Use this for API request bodies where msPlayed or totalMs values arrive as numbers.
+export const toBigInt = (
+    value: number | string | bigint | null | undefined,
+    defaultValue: bigint = 0n
+): bigint => {
+    if (value === null || value === undefined) {
+        return defaultValue;
+    }
+
+    if (typeof value === 'bigint') {
+        return value;
+    }
+
+    if (typeof value === 'number') {
+        if (!Number.isFinite(value)) {
+            throw new Error(`Cannot convert ${value} to BigInt: value is not finite`);
+        }
+        if (!Number.isInteger(value)) {
+            throw new Error(`Cannot convert ${value} to BigInt: value is not an integer`);
+        }
+        return BigInt(value);
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed === '') {
+            return defaultValue;
+        }
+        // Remove any trailing 'n' if someone passed a bigint string literal
+        const normalized = trimmed.endsWith('n') ? trimmed.slice(0, -1) : trimmed;
+        try {
+            return BigInt(normalized);
+        } catch {
+            throw new Error(`Cannot convert "${value}" to BigInt: invalid format`);
+        }
+    }
+
+    throw new Error(`Cannot convert ${typeof value} to BigInt`);
+};
