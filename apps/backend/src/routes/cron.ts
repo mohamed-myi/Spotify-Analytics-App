@@ -124,6 +124,7 @@ export async function cronRoutes(fastify: FastifyInstance): Promise<void> {
                 message: `Queued ${eligibleUsers.length} users`
             };
         } finally {
+            await redis.del(SYNC_LOCK_KEY);
         }
     });
 
