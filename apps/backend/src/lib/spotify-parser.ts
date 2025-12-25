@@ -1,7 +1,7 @@
+import { Source } from '@prisma/client';
 import type { SpotifyRecentlyPlayedResponse } from '../types/spotify';
 import type { ParsedListeningEvent } from '../types/ingestion';
 
-// Transform Spotify API response into our internal format
 export function parseRecentlyPlayed(
     response: SpotifyRecentlyPlayedResponse
 ): ParsedListeningEvent[] {
@@ -10,7 +10,7 @@ export function parseRecentlyPlayed(
         playedAt: new Date(item.played_at),
         msPlayed: item.track.duration_ms,
         isEstimated: true,
-        source: 'api' as const,
+        source: Source.API,
         track: {
             spotifyId: item.track.id,
             name: item.track.name,

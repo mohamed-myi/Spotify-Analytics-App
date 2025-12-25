@@ -17,22 +17,28 @@ import {
     SpotifyRateLimitError,
     SpotifyDownError,
 } from './spotify-errors';
-import { spotifyCircuitBreaker, CircuitBreakerOpenError } from './circuit-breaker';
+import { getBreaker, shouldCountAsFailure, CircuitBreakerOpenError } from './circuit-breaker';
 import { logger } from './logger';
 
 export const SPOTIFY_API_URL = 'https://api.spotify.com/v1';
 
-// Time range for top endpoints
+export { CircuitBreakerOpenError };
+
 export type TimeRange = 'short_term' | 'medium_term' | 'long_term';
 
-// Options for recently played tracks
 export interface RecentlyPlayedOptions {
-    limit?: number;  // 1-50, default 50
-    after?: number;  // get plays after this time (ms)
-    before?: number; // get plays before this time (ms)
+    limit?: number,
+    after?: number,
+    before?: number,
 }
 
-// Handle API response and throw appropriate errors
+function getServiceKey(url: string): string {
+    const path = new URL(url).pathname;
+    if (path.startsWith('/v1/me/player')) return 'spotify:player';
+    if (path.startsWith('/v1/me/top')) return 'spotify:top';
+    return 'spotify:catalog';
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
     if (response.ok) {
         return response.json() as Promise<T>;
@@ -55,52 +61,46 @@ async function handleResponse<T>(response: Response): Promise<T> {
         throw new SpotifyDownError(response.status);
     }
 
-    // Other errors
     const errorText = await response.text();
     throw new SpotifyApiError(`Spotify API error: ${errorText}`, response.status, false);
 }
 
-// Wrapper for fetch with retry logic and circuit breaker
 export async function fetchWithRetry<T>(
     url: string,
     accessToken: string,
     options: RequestInit = {}
 ): Promise<T> {
-    // Check circuit breaker before making request
-    if (spotifyCircuitBreaker.isOpen()) {
-        throw new CircuitBreakerOpenError('Spotify API circuit breaker is open');
-    }
+    const breaker = getBreaker(getServiceKey(url));
 
-    return pRetry(
-        async () => {
-            const response = await fetch(url, {
-                ...options,
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    ...options.headers,
-                },
-            });
-            const result = await handleResponse<T>(response);
-            spotifyCircuitBreaker.recordSuccess();
-            return result;
-        },
-        {
-            retries: 3,
-            onFailedAttempt: (error) => {
-                spotifyCircuitBreaker.recordFailure();
-                if (!(error instanceof SpotifyDownError)) {
-                    throw error;
-                }
-                logger.warn(
-                    { attempt: error.attemptNumber, retriesLeft: error.retriesLeft },
-                    'Spotify API retry attempt failed'
-                );
+    return breaker.execute(
+        () => pRetry(
+            async () => {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        ...options.headers,
+                    },
+                });
+                return handleResponse<T>(response);
             },
-        }
+            {
+                retries: 3,
+                onFailedAttempt: (error) => {
+                    if (!(error instanceof SpotifyDownError)) {
+                        throw error;
+                    }
+                    logger.warn(
+                        { attempt: error.attemptNumber, retriesLeft: error.retriesLeft },
+                        'Spotify API retry attempt failed'
+                    );
+                },
+            }
+        ),
+        shouldCountAsFailure
     );
 }
 
-// Fetch recently played tracks
 export async function getRecentlyPlayed(
     accessToken: string,
     options: RecentlyPlayedOptions = {}
@@ -119,7 +119,6 @@ export async function getRecentlyPlayed(
     return fetchWithRetry<SpotifyRecentlyPlayedResponse>(url, accessToken);
 }
 
-// Get user's top tracks
 export async function getTopTracks(
     accessToken: string,
     timeRange: TimeRange = 'medium_term',
@@ -133,7 +132,6 @@ export async function getTopTracks(
     return fetchWithRetry<SpotifyTopTracksResponse>(url, accessToken);
 }
 
-// Get user's top artists
 export async function getTopArtists(
     accessToken: string,
     timeRange: TimeRange = 'medium_term',
@@ -147,7 +145,6 @@ export async function getTopArtists(
     return fetchWithRetry<SpotifyTopArtistsResponse>(url, accessToken);
 }
 
-// Batch fetch track metadata (max 50 per call)
 export async function getTracksBatch(
     accessToken: string,
     trackIds: string[]
@@ -161,7 +158,6 @@ export async function getTracksBatch(
     return response.tracks;
 }
 
-// Batch fetch artist metadata (max 50 per call)
 export async function getArtistsBatch(
     accessToken: string,
     artistIds: string[]
@@ -175,7 +171,6 @@ export async function getArtistsBatch(
     return response.artists;
 }
 
-// Batch fetch album metadata (max 20 per call)
 export async function getAlbumsBatch(
     accessToken: string,
     albumIds: string[]

@@ -1,4 +1,5 @@
 import { parseRecentlyPlayed } from '../../src/lib/spotify-parser';
+import { Source } from '@prisma/client';
 import type { SpotifyRecentlyPlayedResponse } from '../../src/types/spotify';
 
 describe('parseRecentlyPlayed', () => {
@@ -36,7 +37,7 @@ describe('parseRecentlyPlayed', () => {
         expect(result[0].playedAt).toEqual(new Date('2025-01-01T12:00:00Z'));
         expect(result[0].msPlayed).toBe(180000);
         expect(result[0].isEstimated).toBe(true);
-        expect(result[0].source).toBe('api');
+        expect(result[0].source).toBe(Source.API);
     });
 
     test('extracts track data correctly', () => {
@@ -171,6 +172,6 @@ describe('parseRecentlyPlayed', () => {
         };
         const result = parseRecentlyPlayed(response);
         expect(result.every((e) => e.isEstimated === true)).toBe(true);
-        expect(result.every((e) => e.source === 'api')).toBe(true);
+        expect(result.every((e) => e.source === Source.API)).toBe(true);
     });
 });
