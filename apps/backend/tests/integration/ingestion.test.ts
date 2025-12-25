@@ -1,24 +1,30 @@
 import { prisma } from '../../src/lib/prisma';
 import { insertListeningEvent } from '../../src/services/ingestion';
+import { Source } from '@prisma/client';
 import type { ParsedListeningEvent } from '../../src/types/ingestion';
+import { ensurePartitionForDate } from '../setup';
 
-// Test user and track IDs; created fresh each test
 let testUserId: string;
 let testTrackData: ParsedListeningEvent['track'];
 
+const TEST_DATE_1 = new Date('2025-01-01T12:00:00Z');
+const TEST_DATE_2 = new Date('2025-01-01T13:00:00Z');
+
 const createTestEvent = (overrides: Partial<ParsedListeningEvent> = {}): ParsedListeningEvent => ({
     spotifyTrackId: testTrackData.spotifyId,
-    playedAt: new Date('2025-01-01T12:00:00Z'),
+    playedAt: TEST_DATE_1,
     msPlayed: 180000,
     isEstimated: true,
-    source: 'api',
+    source: Source.API,
     track: testTrackData,
     ...overrides,
 });
 
 describe('Idempotency', () => {
     beforeAll(async () => {
-        // Create test user
+        await ensurePartitionForDate(TEST_DATE_1);
+        await ensurePartitionForDate(TEST_DATE_2);
+
         const user = await prisma.user.create({
             data: {
                 spotifyId: `test-spotify-${Date.now()}`,
@@ -27,7 +33,6 @@ describe('Idempotency', () => {
         });
         testUserId = user.id;
 
-        // Create test album
         const album = await prisma.album.create({
             data: {
                 spotifyId: `test-album-${Date.now()}`,
@@ -35,7 +40,6 @@ describe('Idempotency', () => {
             },
         });
 
-        // Create test artist
         const artist = await prisma.artist.create({
             data: {
                 spotifyId: `test-artist-${Date.now()}`,
@@ -43,7 +47,6 @@ describe('Idempotency', () => {
             },
         });
 
-        // Set up track data for tests
         testTrackData = {
             spotifyId: `test-track-${Date.now()}`,
             name: 'Test Track',
@@ -65,7 +68,6 @@ describe('Idempotency', () => {
     });
 
     afterAll(async () => {
-        // Clean up test data
         await prisma.listeningEvent.deleteMany({
             where: { userId: testUserId },
         });
@@ -74,7 +76,6 @@ describe('Idempotency', () => {
     });
 
     beforeEach(async () => {
-        // Clear listening events before each test
         await prisma.listeningEvent.deleteMany({
             where: { userId: testUserId },
         });
@@ -94,11 +95,9 @@ describe('Idempotency', () => {
     test('skips duplicate API record', async () => {
         const event = createTestEvent();
 
-        // First insert
         const first = await insertListeningEvent(testUserId, event);
         expect(first).toBe('added');
 
-        // Second insert (same event)
         const second = await insertListeningEvent(testUserId, event);
         expect(second).toBe('skipped');
 
@@ -109,51 +108,45 @@ describe('Idempotency', () => {
     });
 
     test('import claims estimated record', async () => {
-        // First: API inserts estimated record
         const apiEvent = createTestEvent({
             isEstimated: true,
-            source: 'api',
+            source: Source.API,
             msPlayed: 180000,
         });
         await insertListeningEvent(testUserId, apiEvent);
 
-        // Then: Import with real ms_played
         const importEvent = createTestEvent({
             isEstimated: false,
-            source: 'import',
-            msPlayed: 45000, // Actual listen time
+            source: Source.IMPORT,
+            msPlayed: 45000,
         });
         const result = await insertListeningEvent(testUserId, importEvent);
         expect(result).toBe('updated');
 
-        // Verify update
         const record = await prisma.listeningEvent.findFirst({
             where: { userId: testUserId },
         });
         expect(record?.msPlayed).toBe(45000);
         expect(record?.isEstimated).toBe(false);
-        expect(record?.source).toBe('import');
+        expect(record?.source).toBe(Source.IMPORT);
     });
 
     test('import does not overwrite ground truth', async () => {
-        // Insert with ground truth
         const truthEvent = createTestEvent({
             isEstimated: false,
-            source: 'import',
+            source: Source.IMPORT,
             msPlayed: 45000,
         });
         await insertListeningEvent(testUserId, truthEvent);
 
-        // Try to overwrite with different ms_played
         const secondImport = createTestEvent({
             isEstimated: false,
-            source: 'import',
+            source: Source.IMPORT,
             msPlayed: 99999,
         });
         const result = await insertListeningEvent(testUserId, secondImport);
         expect(result).toBe('skipped');
 
-        // Verify original value preserved
         const record = await prisma.listeningEvent.findFirst({
             where: { userId: testUserId },
         });
