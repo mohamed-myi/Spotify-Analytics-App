@@ -1,5 +1,6 @@
 .env*
 !.env.example
+!.env.test
 node_modules/
 dist/
 .next/
@@ -24,5 +25,5 @@ coverage/
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-
+scripts/
 /generated/prisma
