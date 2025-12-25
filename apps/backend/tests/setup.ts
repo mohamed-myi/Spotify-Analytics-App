@@ -1,10 +1,8 @@
 import { config } from 'dotenv';
 import { resolve } from 'path';
 
-// Load .env from project root
 config({ path: resolve(__dirname, '../../../.env') });
 
-// Global Mocks for Integration Tests
 jest.mock('ioredis', () => {
     return jest.fn().mockImplementation(() => ({
         on: jest.fn(),
@@ -29,3 +27,10 @@ jest.mock('bullmq', () => ({
         close: jest.fn(),
     })),
 }));
+
+// Re-export partition utilities from the shared library to ensure tests use the same hardened logic as production
+export {
+    ensurePartitionForDate,
+    ensurePartitionsForDates,
+    ensurePartitionsForRange
+} from '../src/lib/partitions';
