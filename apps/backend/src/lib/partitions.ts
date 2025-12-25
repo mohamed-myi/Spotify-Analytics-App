@@ -11,6 +11,12 @@ export async function ensurePartitionForDate(date: Date): Promise<{ partitionNam
     const startDate = new Date(Date.UTC(year, month - 1, 1)).toISOString();
     const endDate = new Date(Date.UTC(year, month, 1)).toISOString();
 
+    // Any data older than Dec 25, 2020 falls into the default 'listening_events_legacy' partition, so we skip partition creation.
+    const cutoffDate = new Date('2020-12-25T00:00:00Z');
+    if (new Date(startDate) < cutoffDate) {
+        return { partitionName: 'listening_events_legacy', created: false };
+    }
+
     try {
         await prisma.$executeRawUnsafe(`
             CREATE TABLE IF NOT EXISTS "${partitionName}" 
@@ -38,10 +44,8 @@ export async function ensurePartitionForDate(date: Date): Promise<{ partitionNam
     }
 }
 
-/**
- * Creates partitions for multiple dates at once (concurrent).
- * Extracts unique months to avoid duplicate creation.
- */
+// Creates partitions for multiple dates at once (concurrent).
+// Extracts unique months to avoid duplicate creation.
 export async function ensurePartitionsForDates(dates: Date[]): Promise<void> {
     const uniqueMonths = new Set(dates.map(d =>
         `${d.getUTCFullYear()}-${d.getUTCMonth()}`
