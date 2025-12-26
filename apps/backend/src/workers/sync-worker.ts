@@ -1,5 +1,6 @@
 import { Worker, Job } from 'bullmq';
-import { redis, waitForRateLimit } from '../lib/redis';
+import Redis from 'ioredis';
+import { redis, waitForRateLimit, getRedisUrl, REDIS_CONNECTION_CONFIG } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { getValidAccessToken, recordTokenFailure, resetTokenFailures } from '../lib/token-manager';
 import { getRecentlyPlayed } from '../lib/spotify-api';
@@ -173,11 +174,14 @@ async function processSync(job: Job<SyncUserJob>): Promise<SyncSummary> {
     }
 }
 
+// Create a dedicated Redis connection for the worker to avoid blocking the shared instance
+const workerConnection = new Redis(getRedisUrl(), REDIS_CONNECTION_CONFIG);
+
 export const syncWorker = new Worker<SyncUserJob, SyncSummary>(
     'sync-user',
     processSync,
     {
-        connection: redis,
+        connection: workerConnection,
         concurrency: 5,
     }
 );
@@ -202,6 +206,7 @@ syncWorker.on('failed', (job, error) => {
 });
 
 setSyncWorkerRunning(true);
+log.info('Sync worker initialized with dedicated Redis connection');
 
 export async function closeSyncWorker(): Promise<void> {
     await syncWorker.close();

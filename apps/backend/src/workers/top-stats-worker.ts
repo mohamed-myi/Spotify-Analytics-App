@@ -1,5 +1,6 @@
 import { Worker, UnrecoverableError } from 'bullmq';
-import { redis } from '../lib/redis';
+import Redis from 'ioredis';
+import { redis, getRedisUrl, REDIS_CONNECTION_CONFIG } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { workerLoggers } from '../lib/logger';
 import { setTopStatsWorkerRunning } from './worker-status';
@@ -16,6 +17,9 @@ import {
 const log = workerLoggers.topStats;
 
 const JOB_TIMEOUT_MS = 60000;
+// Create a dedicated Redis connection for the worker to avoid blocking the shared instance
+const workerConnection = new Redis(getRedisUrl(), REDIS_CONNECTION_CONFIG);
+
 export const topStatsWorker = new Worker<TopStatsJobData>(
     'top-stats',
     async (job) => {
@@ -78,7 +82,7 @@ export const topStatsWorker = new Worker<TopStatsJobData>(
         }
     },
     {
-        connection: redis,
+        connection: workerConnection,
         concurrency: 3,
     }
 );

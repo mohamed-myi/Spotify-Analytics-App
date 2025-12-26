@@ -2,7 +2,7 @@ import Redis from 'ioredis';
 
 let _redis: Redis | null = null;
 
-function getRedisUrl(): string {
+export function getRedisUrl(): string {
     const url = process.env.REDIS_URL;
     if (!url) {
         throw new Error('REDIS_URL environment variable is required');
@@ -136,6 +136,10 @@ export async function tryLockMetadata(
     const result = await redis.set(key, '1', 'EX', METADATA_LOCK_TTL, 'NX');
     return result === 'OK';
 }
+
+export const REDIS_CONNECTION_CONFIG = {
+    maxRetriesPerRequest: null,
+};
 
 export async function closeRedis(): Promise<void> {
     await redis.quit();
