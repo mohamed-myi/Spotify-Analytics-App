@@ -103,8 +103,6 @@ export async function cronRoutes(fastify: FastifyInstance): Promise<void> {
                 name: `sync-${user.id}`,
                 data: { userId: user.id },
                 opts: {
-
-                    jobId: `sync-${user.id}`,
                     removeOnComplete: 100,
                     removeOnFail: 50,
                 }
