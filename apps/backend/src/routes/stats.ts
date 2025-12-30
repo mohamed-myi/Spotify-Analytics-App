@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { Term, BucketType } from '@prisma/client';
 import { getOrSet } from '../lib/redis';
-import { triggerLazyRefreshIfStale } from '../services/top-stats-service';
+import { triggerLazyRefreshIfStale, isTopStatsHydrated } from '../services/top-stats-service';
 import { topStatsQueue } from '../workers/top-stats-queue';
 import { getSummaryStats, getOverviewStats, getActivityStats } from '../services/stats-service';
 
@@ -222,65 +222,73 @@ export async function statsRoutes(fastify: FastifyInstance) {
         const userId = request.userId;
         if (!userId) return reply.status(401).send({ error: 'Unauthorized' });
 
-        const refreshStatus = await triggerLazyRefreshIfStale(userId);
+        await triggerLazyRefreshIfStale(userId);
 
         const range = request.query.range || '4weeks';
         const sortBy = request.query.sortBy || 'rank';
 
         const term = TERM_MAP[range];
         const isAllTime = range === 'alltime';
+        const isSpotifyTermBased = !isAllTime && sortBy === 'rank';
 
-        const cacheKey = `stats:tracks:${userId}:${range}:${sortBy}`;
+        // Fetch data directly first to check if hydration is complete
+        let data: any[];
 
-        const response = await getOrSet(cacheKey, CACHE_TTL, async () => {
-            if (isAllTime || sortBy === 'time') {
-                const topStats = await prisma.userTrackStats.findMany({
-                    where: { userId },
-                    orderBy: sortBy === 'time' ? { totalMs: 'desc' } : { playCount: 'desc' },
-                    take: 50,
-                    include: {
-                        track: {
-                            include: {
-                                artists: { include: { artist: true } },
-                                album: true
-                            }
+        if (isAllTime || sortBy === 'time') {
+            const topStats = await prisma.userTrackStats.findMany({
+                where: { userId },
+                orderBy: sortBy === 'time' ? { totalMs: 'desc' } : { playCount: 'desc' },
+                take: 50,
+                include: {
+                    track: {
+                        include: {
+                            artists: { include: { artist: true } },
+                            album: true
                         }
                     }
-                });
+                }
+            });
 
-                const data = topStats.map((stat: any, index: number) => ({
-                    ...stat.track,
-                    rank: index + 1,
-                    totalMs: stat.totalMs,
-                    playCount: stat.playCount
-                }));
-
-                return data;
-
-            } else {
-                const topTracks = await prisma.spotifyTopTrack.findMany({
-                    where: { userId, term },
-                    orderBy: { rank: 'asc' },
-                    include: {
-                        track: {
-                            include: {
-                                artists: { include: { artist: true } },
-                                album: true
-                            }
+            data = topStats.map((stat: any, index: number) => ({
+                ...stat.track,
+                rank: index + 1,
+                totalMs: stat.totalMs,
+                playCount: stat.playCount
+            }));
+        } else {
+            const topTracks = await prisma.spotifyTopTrack.findMany({
+                where: { userId, term },
+                orderBy: { rank: 'asc' },
+                include: {
+                    track: {
+                        include: {
+                            artists: { include: { artist: true } },
+                            album: true
                         }
-                    },
-                });
+                    }
+                },
+            });
 
-                const data = topTracks.map((t: any) => ({
-                    ...t.track,
-                    rank: t.rank,
-                }));
+            data = topTracks.map((t: any) => ({
+                ...t.track,
+                rank: t.rank,
+            }));
+        }
 
-                return data;
+        // If empty and using Spotify term data, check if hydration is complete
+        if (data.length === 0 && isSpotifyTermBased) {
+            const hydrated = await isTopStatsHydrated(userId);
+            if (!hydrated) {
+                // Do NOT cache; return 202 processing status
+                return reply.status(202).send({ status: 'processing', data: [] });
             }
-        });
+        }
 
-        return response;
+        // Cache only when data is present or hydration is complete
+        const cacheKey = `stats:tracks:${userId}:${range}:${sortBy}`;
+        await getOrSet(cacheKey, CACHE_TTL, async () => data);
+
+        return data;
     });
 
     fastify.get<{ Querystring: { range?: string } }>('/me/stats/top/artists', {
@@ -315,42 +323,51 @@ export async function statsRoutes(fastify: FastifyInstance) {
 
         const term = TERM_MAP[range];
         const isAllTime = range === 'alltime';
+        const isSpotifyTermBased = !isAllTime;
 
-        const cacheKey = `stats:artists:${userId}:${range}`;
+        // Fetch data directly first to check if hydration is complete
+        let data: any[];
 
-        const response = await getOrSet(cacheKey, CACHE_TTL, async () => {
-            if (isAllTime) {
-                const topStats = await prisma.userArtistStats.findMany({
-                    where: { userId },
-                    orderBy: { playCount: 'desc' },
-                    take: 50,
-                    include: { artist: true }
-                });
+        if (isAllTime) {
+            const topStats = await prisma.userArtistStats.findMany({
+                where: { userId },
+                orderBy: { playCount: 'desc' },
+                take: 50,
+                include: { artist: true }
+            });
 
-                const data = topStats.map((stat: any, index: number) => ({
-                    ...stat.artist,
-                    rank: index + 1,
-                    playCount: stat.playCount
-                }));
+            data = topStats.map((stat: any, index: number) => ({
+                ...stat.artist,
+                rank: index + 1,
+                playCount: stat.playCount
+            }));
+        } else {
+            const topArtists = await prisma.spotifyTopArtist.findMany({
+                where: { userId, term },
+                orderBy: { rank: 'asc' },
+                include: { artist: true },
+            });
 
-                return data;
-            } else {
-                const topArtists = await prisma.spotifyTopArtist.findMany({
-                    where: { userId, term },
-                    orderBy: { rank: 'asc' },
-                    include: { artist: true },
-                });
+            data = topArtists.map((a: any) => ({
+                ...a.artist,
+                rank: a.rank,
+            }));
+        }
 
-                const data = topArtists.map((a: any) => ({
-                    ...a.artist,
-                    rank: a.rank,
-                }));
-
-                return data;
+        // If empty and using Spotify term data, check if hydration is complete
+        if (data.length === 0 && isSpotifyTermBased) {
+            const hydrated = await isTopStatsHydrated(userId);
+            if (!hydrated) {
+                // Do NOT cache; return 202 processing status
+                return reply.status(202).send({ status: 'processing', data: [] });
             }
-        });
+        }
 
-        return response;
+        // Cache only when data is present or hydration is complete
+        const cacheKey = `stats:artists:${userId}:${range}`;
+        await getOrSet(cacheKey, CACHE_TTL, async () => data);
+
+        return data;
     });
 
     fastify.get('/me/stats/song-of-the-day', {

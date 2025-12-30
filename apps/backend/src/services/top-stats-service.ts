@@ -1,12 +1,11 @@
 import { prisma } from '../lib/prisma';
-import { Term } from '@prisma/client';
+import { Term, Prisma } from '@prisma/client';
 import { getValidAccessToken, resetTokenFailures } from '../lib/token-manager';
 import { getTopTracks, getTopArtists, TimeRange } from '../lib/spotify-api';
 import { upsertTrack } from './ingestion';
 import { redis, waitForRateLimit } from '../lib/redis';
 import { workerLoggers } from '../lib/logger';
 import { topStatsQueue } from '../workers/top-stats-queue';
-import { SpotifyRateLimitError } from '../lib/spotify-errors';
 
 const log = workerLoggers.topStats;
 
@@ -16,7 +15,6 @@ const ACTIVE_REFRESH_HOURS = 24;
 const CASUAL_REFRESH_HOURS = 72;
 
 const TERMS: Term[] = [Term.SHORT_TERM, Term.MEDIUM_TERM, Term.LONG_TERM];
-const PROGRESS_TTL_SECONDS = 2 * 60 * 60;
 
 function toSpotifyTimeRange(term: Term): TimeRange {
     switch (term) {
@@ -84,31 +82,46 @@ export async function triggerLazyRefreshIfStale(userId: string): Promise<{ queue
     return { queued: false, staleHours };
 }
 
-function progressKey(userId: string, jobId: string): string {
-    return `top-stats:progress:${userId}:${jobId}`;
+export async function isTopStatsHydrated(userId: string): Promise<boolean> {
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { topStatsRefreshedAt: true }
+    });
+    return user !== null && user.topStatsRefreshedAt !== null;
 }
 
-async function getCompletedTerms(userId: string, jobId: string): Promise<Set<Term>> {
-    const members = await redis.smembers(progressKey(userId, jobId));
-    return new Set(members as Term[]);
+// Types for in-memory aggregation before atomic write
+interface FetchedTrack {
+    term: Term;
+    rank: number;
+    trackId: string;
 }
 
-async function markTermComplete(userId: string, jobId: string, term: Term): Promise<void> {
-    const key = progressKey(userId, jobId);
-    await redis.sadd(key, term);
-    await redis.expire(key, PROGRESS_TTL_SECONDS);
+interface FetchedArtist {
+    term: Term;
+    rank: number;
+    artistId: string;
 }
 
-async function clearProgress(userId: string, jobId: string): Promise<void> {
-    await redis.del(progressKey(userId, jobId));
+interface FetchedTermData {
+    tracks: FetchedTrack[];
+    artists: FetchedArtist[];
+    trackCount: number;
+    artistCount: number;
 }
 
-async function processTermTracks(
+// Fetch data from Spotify API for a single term; returns in-memory data
+async function fetchTermData(
     userId: string,
     accessToken: string,
     term: Term
-): Promise<void> {
+): Promise<FetchedTermData> {
     const spotifyTerm = toSpotifyTimeRange(term);
+    const tracks: FetchedTrack[] = [];
+    const artists: FetchedArtist[] = [];
+
+    // Fetch tracks
+    await waitForRateLimit();
     const topTracksRes = await getTopTracks(accessToken, spotifyTerm, 50);
 
     for (let i = 0; i < topTracksRes.items.length; i++) {
@@ -129,28 +142,13 @@ async function processTermTracks(
             artists: spotifyTrack.artists.map(a => ({ spotifyId: a.id, name: a.name })),
         };
 
+        // Upsert track/album/artist entities outside transaction; these are idempotent
         const { trackId } = await upsertTrack(trackForIngest);
-
-        await prisma.spotifyTopTrack.upsert({
-            where: { userId_term_rank: { userId, term, rank } },
-            create: { userId, term, rank, trackId },
-            update: { trackId },
-        });
+        tracks.push({ term, rank, trackId });
     }
 
-    if (topTracksRes.items.length < 50) {
-        await prisma.spotifyTopTrack.deleteMany({
-            where: { userId, term, rank: { gt: topTracksRes.items.length } },
-        });
-    }
-}
-
-async function processTermArtists(
-    userId: string,
-    accessToken: string,
-    term: Term
-): Promise<void> {
-    const spotifyTerm = toSpotifyTimeRange(term);
+    // Fetch artists
+    await waitForRateLimit();
     const topArtistsRes = await getTopArtists(accessToken, spotifyTerm, 50);
 
     for (let i = 0; i < topArtistsRes.items.length; i++) {
@@ -164,28 +162,94 @@ async function processTermArtists(
             genres: spotifyArtist.genres,
         };
 
-        const artistId = (await prisma.artist.upsert({
+        // Upsert artist entity outside transaction; idempotent
+        const artistRecord = await prisma.artist.upsert({
             where: { spotifyId: artistData.spotifyId },
             create: artistData,
             update: { imageUrl: artistData.imageUrl, genres: artistData.genres },
             select: { id: true },
-        })).id;
-
-        await prisma.spotifyTopArtist.upsert({
-            where: { userId_term_rank: { userId, term, rank } },
-            create: { userId, term, rank, artistId },
-            update: { artistId },
         });
+
+        artists.push({ term, rank, artistId: artistRecord.id });
     }
 
-    if (topArtistsRes.items.length < 50) {
-        await prisma.spotifyTopArtist.deleteMany({
-            where: { userId, term, rank: { gt: topArtistsRes.items.length } },
-        });
-    }
+    return {
+        tracks,
+        artists,
+        trackCount: topTracksRes.items.length,
+        artistCount: topArtistsRes.items.length,
+    };
 }
 
-export async function processUserTopStats(userId: string, jobId?: string): Promise<void> {
+// Fetch all terms sequentially; respects rate limits; aggregates in memory
+async function fetchAllTermsData(
+    userId: string,
+    accessToken: string
+): Promise<Map<Term, FetchedTermData>> {
+    const allData = new Map<Term, FetchedTermData>();
+
+    for (const term of TERMS) {
+        log.info({ userId, term }, 'Fetching term data from Spotify');
+        const termData = await fetchTermData(userId, accessToken, term);
+        allData.set(term, termData);
+        log.info({ userId, term, tracks: termData.trackCount, artists: termData.artistCount }, 'Term data fetched');
+    }
+
+    return allData;
+}
+
+// Persist all data atomically using a Prisma transaction
+async function persistAllTermsData(
+    userId: string,
+    allData: Map<Term, FetchedTermData>
+): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+        // Delete existing top tracks/artists for this user to replace with fresh data
+        await tx.spotifyTopTrack.deleteMany({ where: { userId } });
+        await tx.spotifyTopArtist.deleteMany({ where: { userId } });
+
+        // Prepare batch inserts
+        const trackInserts: Prisma.SpotifyTopTrackCreateManyInput[] = [];
+        const artistInserts: Prisma.SpotifyTopArtistCreateManyInput[] = [];
+
+        for (const [, termData] of allData) {
+            for (const track of termData.tracks) {
+                trackInserts.push({
+                    userId,
+                    term: track.term,
+                    rank: track.rank,
+                    trackId: track.trackId,
+                });
+            }
+            for (const artist of termData.artists) {
+                artistInserts.push({
+                    userId,
+                    term: artist.term,
+                    rank: artist.rank,
+                    artistId: artist.artistId,
+                });
+            }
+        }
+
+        // Batch insert all tracks and artists
+        if (trackInserts.length > 0) {
+            await tx.spotifyTopTrack.createMany({ data: trackInserts });
+        }
+        if (artistInserts.length > 0) {
+            await tx.spotifyTopArtist.createMany({ data: artistInserts });
+        }
+
+        // Update topStatsRefreshedAt inside transaction; atomic with data
+        await tx.user.update({
+            where: { id: userId },
+            data: { topStatsRefreshedAt: new Date() },
+        });
+
+        log.info({ userId, tracks: trackInserts.length, artists: artistInserts.length }, 'Atomic write completed');
+    });
+}
+
+export async function processUserTopStats(userId: string, _jobId?: string): Promise<void> {
     const tokenResult = await getValidAccessToken(userId);
     if (!tokenResult) {
         log.info({ userId }, 'Skipping top stats: No valid token');
@@ -193,29 +257,14 @@ export async function processUserTopStats(userId: string, jobId?: string): Promi
     }
     const accessToken = tokenResult.accessToken;
 
-    const effectiveJobId = jobId || `manual-${Date.now()}`;
-    const completedTerms = await getCompletedTerms(userId, effectiveJobId);
+    // Fetch all data from Spotify; sequential API calls with rate limiting
+    const allData = await fetchAllTermsData(userId, accessToken);
 
-    for (const term of TERMS) {
-        if (completedTerms.has(term)) {
-            log.info({ userId, term }, 'Skipping already-completed term');
-            continue;
-        }
+    // Persist all data atomically; all-or-nothing write
+    await persistAllTermsData(userId, allData);
 
-        await waitForRateLimit();
-
-        await processTermTracks(userId, accessToken, term);
-
-        await waitForRateLimit();
-
-        await processTermArtists(userId, accessToken, term);
-
-        await markTermComplete(userId, effectiveJobId, term);
-        log.info({ userId, term }, 'Term completed');
-    }
-
-    await clearProgress(userId, effectiveJobId);
     await resetTokenFailures(userId);
+    log.info({ userId }, 'Top stats refresh completed');
 }
 
 export function hoursAgo(hours: number): Date {
@@ -226,4 +275,4 @@ export function daysAgo(days: number): Date {
     return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
 
-export { TERMS, getCompletedTerms, markTermComplete, clearProgress };
+export { TERMS };

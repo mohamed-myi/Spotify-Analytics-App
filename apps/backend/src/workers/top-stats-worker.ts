@@ -18,7 +18,6 @@ const log = workerLoggers.topStats;
 
 const JOB_TIMEOUT_MS = 60000;
 // Create a dedicated Redis connection for the worker to avoid blocking the shared instance
-// Create a dedicated Redis connection for the worker to avoid blocking the shared instance
 let workerConnection: Redis | null = null;
 export let topStatsWorker: Worker<TopStatsJobData> | null = null;
 
@@ -46,10 +45,6 @@ export function setupTopStatsWorker() {
                     timeoutPromise
                 ]);
 
-                await prisma.user.update({
-                    where: { id: userId },
-                    data: { topStatsRefreshedAt: new Date() }
-                });
 
                 const elapsed = Date.now() - startTime;
                 log.info({ userId, elapsedMs: elapsed }, 'Top stats refresh completed');

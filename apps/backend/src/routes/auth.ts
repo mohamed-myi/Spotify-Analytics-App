@@ -10,6 +10,7 @@ import {
     getUserProfile,
 } from '../lib/spotify';
 import { syncUserQueue } from '../workers/queues';
+import { topStatsQueue } from '../workers/top-stats-queue';
 import { cacheAccessToken } from '../lib/token-manager';
 import { AUTH_RATE_LIMIT } from '../middleware/rate-limit';
 
@@ -171,7 +172,16 @@ export async function authRoutes(fastify: FastifyInstance) {
             });
 
             fastify.log.info(`User ${user.id} logged in, triggering initial sync`);
-            await syncUserQueue.add(`sync-${user.id}`, { userId: user.id }, { delay: 5000 });
+
+            // Trigger sync and top stats refresh in parallel
+            await Promise.all([
+                syncUserQueue.add(`sync-${user.id}`, { userId: user.id }, { delay: 5000 }),
+                topStatsQueue.add(
+                    `login-${user.id}`,
+                    { userId: user.id, priority: 'high' },
+                    { priority: 1, jobId: `login-${user.id}` }
+                ),
+            ]);
 
             return reply.redirect(`${FRONTEND_URL}/dashboard`);
         } catch (err) {

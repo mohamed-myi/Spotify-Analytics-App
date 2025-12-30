@@ -36,6 +36,11 @@ jest.mock('@/services/stats-service', () => ({
     getActivityStats: jest.fn(),
 }));
 
+jest.mock('@/services/top-stats-service', () => ({
+    triggerLazyRefreshIfStale: jest.fn().mockResolvedValue({ queued: false, staleHours: 0 }),
+    isTopStatsHydrated: jest.fn().mockResolvedValue(true),
+}));
+
 jest.mock('@/lib/redis', () => {
     const mockRedis = {
         get: jest.fn(),
