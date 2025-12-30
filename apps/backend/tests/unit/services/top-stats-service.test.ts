@@ -27,8 +27,22 @@ const mockPrisma = {
     },
     artist: {
         upsert: jest.fn(),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+    },
+    album: {
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+    },
+    track: {
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+    },
+    trackArtist: {
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     $transaction: mockTransaction,
+    $executeRaw: jest.fn(),
 };
 
 jest.mock('../../../src/lib/prisma', () => ({
@@ -87,39 +101,57 @@ describe('Top Stats Service - Atomic Transaction Tests', () => {
             expect(mockTransaction).not.toHaveBeenCalled();
         });
 
-        it('fetches all terms sequentially and persists atomically', async () => {
+        it('fetches all terms in parallel and persists using bulk operations', async () => {
             (getValidAccessToken as jest.Mock).mockResolvedValue({ accessToken: 'valid-token' });
 
-            // Mock successful responses for all terms
-            mockGetTopTracks.mockResolvedValue({ items: [] });
-            mockGetTopArtists.mockResolvedValue({ items: [] });
+            // Mock successful responses with data to trigger ingestion
+            const mockTrack = {
+                id: 't1', name: 'T1', duration_ms: 1000, preview_url: null,
+                album: { id: 'a1', name: 'A1', images: [], release_date: '2024' },
+                artists: [{ id: 'ar1', name: 'Ar1' }]
+            };
+            const mockArtist = { id: 'ar1', name: 'Ar1', images: [], genres: [] };
 
-            // Mock transaction to execute the callback
+            mockGetTopTracks.mockResolvedValue({ items: [mockTrack] });
+            mockGetTopArtists.mockResolvedValue({ items: [mockArtist] });
+
+            // Mock DB findings for ID resolution
+            mockPrisma.artist.findMany.mockResolvedValue([{ id: 'uuid-ar1', spotifyId: 'ar1' }]);
+            mockPrisma.album.findMany.mockResolvedValue([{ id: 'uuid-a1', spotifyId: 'a1' }]);
+            mockPrisma.track.findMany.mockResolvedValue([{ id: 'uuid-t1', spotifyId: 't1' }]);
+
+            // Mock transaction to execute the callback and track internal calls
+            const mockTxCreateMany = jest.fn().mockResolvedValue({ count: 1 });
+            const mockTxDeleteMany = jest.fn().mockResolvedValue({ count: 1 });
+
             mockTransaction.mockImplementation(async (callback: Function) => {
                 const txClient = {
-                    spotifyTopTrack: {
-                        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-                        createMany: jest.fn().mockResolvedValue({ count: 0 }),
-                    },
-                    spotifyTopArtist: {
-                        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-                        createMany: jest.fn().mockResolvedValue({ count: 0 }),
-                    },
-                    user: {
-                        update: jest.fn().mockResolvedValue({}),
-                    },
+                    spotifyTopTrack: { deleteMany: mockTxDeleteMany, createMany: mockTxCreateMany },
+                    spotifyTopArtist: { deleteMany: mockTxDeleteMany, createMany: mockTxCreateMany },
+                    user: { update: jest.fn().mockResolvedValue({}) },
+                    $executeRaw: jest.fn(),
                 };
                 return callback(txClient);
             });
 
             await processUserTopStats('user-success');
 
-            // Should call API for all 3 terms (tracks + artists = 6 calls total)
+            // Verify Parallel Fetch
             expect(mockGetTopTracks).toHaveBeenCalledTimes(3);
             expect(mockGetTopArtists).toHaveBeenCalledTimes(3);
 
-            // Should execute transaction once
+            // Verify Bulk Catalog Ingestion (Phase 2) - Should use createMany, not upsert
+            expect(mockPrisma.artist.createMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
+            expect(mockPrisma.album.createMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
+            expect(mockPrisma.track.createMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
+            expect(mockPrisma.trackArtist.createMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
+
+            // Verify NO individual upserts
+            expect(mockPrisma.artist.upsert).not.toHaveBeenCalled();
+
+            // Verify Atomic Transaction (Phase 3)
             expect(mockTransaction).toHaveBeenCalledTimes(1);
+            expect(mockTxCreateMany).toHaveBeenCalledTimes(2); // Tracks and Artists
 
             // Should reset token failures after success
             expect(resetTokenFailures).toHaveBeenCalledWith('user-success');

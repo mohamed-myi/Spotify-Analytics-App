@@ -16,7 +16,7 @@ import {
 
 const log = workerLoggers.topStats;
 
-const JOB_TIMEOUT_MS = 60000;
+const JOB_TIMEOUT_MS = 120000;
 // Create a dedicated Redis connection for the worker to avoid blocking the shared instance
 let workerConnection: Redis | null = null;
 export let topStatsWorker: Worker<TopStatsJobData> | null = null;
@@ -36,14 +36,25 @@ export function setupTopStatsWorker() {
             const startTime = Date.now();
 
             try {
+                const controller = new AbortController();
+                const timeoutTimer = setTimeout(() => {
+                    controller.abort();
+                }, JOB_TIMEOUT_MS);
+
                 const timeoutPromise = new Promise<never>((_, reject) => {
-                    setTimeout(() => reject(new Error('Job timeout')), JOB_TIMEOUT_MS);
+                    setTimeout(() => {
+                        reject(new Error('Job timeout'));
+                    }, JOB_TIMEOUT_MS);
                 });
 
-                await Promise.race([
-                    processUserTopStats(userId, jobId),
-                    timeoutPromise
-                ]);
+                try {
+                    await Promise.race([
+                        processUserTopStats(userId, jobId, controller.signal),
+                        timeoutPromise
+                    ]);
+                } finally {
+                    clearTimeout(timeoutTimer);
+                }
 
 
                 const elapsed = Date.now() - startTime;
