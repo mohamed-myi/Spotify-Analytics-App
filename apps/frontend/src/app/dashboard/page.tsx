@@ -7,6 +7,7 @@ import { ContentRow } from "@/components/dashboard/content-row";
 import { ItemModal } from "@/components/dashboard/item-modal";
 import { useUser, useTopArtists, useTopTracks } from "@/hooks/use-dashboard";
 import { useSongOfTheDay } from "@/hooks/use-song-of-the-day";
+import { ProcessingScreen } from "@/components/dashboard/processing-screen";
 
 interface SelectedItem {
     id: string;
@@ -33,14 +34,18 @@ export default function DashboardPage() {
     // Song of the Day for background mode
     const { track: songOfTheDay } = useSongOfTheDay();
 
-    const { artists: topArtists, triggerManualRefresh: refreshArtists } = useTopArtists(artistRange);
-    const { tracks: topTracks, triggerManualRefresh: refreshTracks } = useTopTracks(trackRange);
+    const { artists: topArtists, triggerManualRefresh: refreshArtists, isProcessing: isProcessingArtists } = useTopArtists(artistRange);
+    const { tracks: topTracks, triggerManualRefresh: refreshTracks, isProcessing: isProcessingTracks } = useTopTracks(trackRange);
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
         await Promise.all([refreshArtists(), refreshTracks()]);
         setTimeout(() => setIsRefreshing(false), 5000);
     };
+
+    if (isProcessingArtists || isProcessingTracks) {
+        return <ProcessingScreen message="Syncing your top stats from Spotify..." />;
+    }
 
     return (
         <AppLayout>
@@ -55,7 +60,6 @@ export default function DashboardPage() {
                     topArtistName={heroArtists?.[0]?.name}
                 />
 
-                {/* Content Sections - Overlapping Hero */}
                 <div className="-mt-32 relative z-20 space-y-4">
                     <ContentRow
                         title="Top Artists"

@@ -51,15 +51,27 @@ export function useUser() {
 }
 
 export function useTopArtists(range: string = "4weeks") {
-    const { data, error, isLoading, mutate } = useSWR<SpotifyArtistResponse[]>(`/me/stats/top/artists?range=${range}`, fetcher);
+    const { data: rawData, error, isLoading, mutate } = useSWR<SpotifyArtistResponse[] | { status: string; data: [] }>(
+        `/me/stats/top/artists?range=${range}`,
+        fetcher,
+        {
+            refreshInterval: (data) => {
+                // Poll every 3 seconds if status is 'processing'
+                return (data && 'status' in data && data.status === 'processing') ? 3000 : 0;
+            }
+        }
+    );
 
-    const mappedData = data?.map((item, index) => ({
+    const isProcessing = rawData && 'status' in rawData && rawData.status === 'processing';
+    const data = isProcessing ? [] : (rawData as SpotifyArtistResponse[]);
+
+    const mappedData = Array.isArray(data) ? data.map((item, index) => ({
         id: item.id,
         spotifyId: item.spotifyId,
         name: item.name,
         image: item.imageUrl || "",
         rank: item.rank || index + 1,
-    }));
+    })) : [];
 
     const triggerManualRefresh = async () => {
         try {
@@ -74,6 +86,7 @@ export function useTopArtists(range: string = "4weeks") {
     return {
         artists: mappedData,
         isLoading,
+        isProcessing, // Expose processing state
         isError: error,
         mutate,
         triggerManualRefresh,
@@ -81,9 +94,21 @@ export function useTopArtists(range: string = "4weeks") {
 }
 
 export function useTopTracks(range: string = "4weeks") {
-    const { data, error, isLoading, mutate } = useSWR<SpotifyTrackResponse[]>(`/me/stats/top/tracks?range=${range}`, fetcher);
+    const { data: rawData, error, isLoading, mutate } = useSWR<SpotifyTrackResponse[] | { status: string; data: [] }>(
+        `/me/stats/top/tracks?range=${range}`,
+        fetcher,
+        {
+            refreshInterval: (data) => {
+                // Poll every 3 seconds if status is 'processing'
+                return (data && 'status' in data && data.status === 'processing') ? 3000 : 0;
+            }
+        }
+    );
 
-    const mappedData = data?.map((item, index) => ({
+    const isProcessing = rawData && 'status' in rawData && rawData.status === 'processing';
+    const data = isProcessing ? [] : (rawData as SpotifyTrackResponse[]);
+
+    const mappedData = Array.isArray(data) ? data.map((item, index) => ({
         id: item.id,
         spotifyId: item.spotifyId,
         name: item.name,
@@ -92,7 +117,7 @@ export function useTopTracks(range: string = "4weeks") {
         album: item.album?.name || "Unknown Album",
         image: item.album?.imageUrl || "",
         rank: item.rank || index + 1,
-    }));
+    })) : [];
 
     const triggerManualRefresh = async () => {
         try {
@@ -106,6 +131,7 @@ export function useTopTracks(range: string = "4weeks") {
     return {
         tracks: mappedData,
         isLoading,
+        isProcessing, // Expose processing state
         isError: error,
         mutate,
         triggerManualRefresh,

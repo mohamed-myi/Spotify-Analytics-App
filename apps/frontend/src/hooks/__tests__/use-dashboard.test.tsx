@@ -93,6 +93,7 @@ describe('useTopArtists Hook', () => {
             image: 'http://img.com/pf.jpg',
             rank: 1
         })
+        expect(result.current.isProcessing).toBe(false)
     })
 
     it('handles empty data', () => {
@@ -145,6 +146,21 @@ describe('useTopArtists Hook', () => {
 
         expect(result.current.artists?.[0]?.rank).toBe(1)
         expect(result.current.artists?.[1]?.rank).toBe(2)
+        expect(result.current.isProcessing).toBe(false)
+    })
+
+    it('handles 202 processing state correctly', () => {
+        (useSWR as jest.Mock).mockReturnValue({
+            data: { status: 'processing', data: [] },
+            error: null,
+            isLoading: false
+        })
+
+        const { result } = renderHook(() => useTopArtists())
+
+        expect(result.current.artists).toEqual([])
+        expect(result.current.isProcessing).toBe(true)
+        expect(result.current.isLoading).toBe(false)
     })
 })
 
@@ -230,7 +246,7 @@ describe('useTopTracks Hook', () => {
         const { result } = renderHook(() => useTopTracks())
 
         expect(result.current.isLoading).toBe(true)
-        expect(result.current.tracks).toBeUndefined()
+        expect(result.current.tracks).toEqual([])
     })
 
     it('handles error state', () => {
@@ -243,6 +259,21 @@ describe('useTopTracks Hook', () => {
         const { result } = renderHook(() => useTopTracks())
 
         expect(result.current.isError).toBeTruthy()
+        expect(result.current.isProcessing).toBe(undefined) // Hook logic leaves it undefined/false if data is undefined
+    })
+
+    it('handles 202 processing state correctly', () => {
+        (useSWR as jest.Mock).mockReturnValue({
+            data: { status: 'processing', data: [] },
+            error: null,
+            isLoading: false
+        })
+
+        const { result } = renderHook(() => useTopTracks())
+
+        expect(result.current.tracks).toEqual([])
+        expect(result.current.isProcessing).toBe(true)
+        expect(result.current.isLoading).toBe(false)
     })
 })
 
