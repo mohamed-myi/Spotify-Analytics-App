@@ -30,10 +30,10 @@ export function ProfileHeader({ displayName, spotifyId, imageUrl, country, membe
                 {/* Avatar */}
                 <div className="relative">
                     {/* Glow effect */}
-                    <div className="absolute -inset-1 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full opacity-30 blur-lg" />
+                    <div className="absolute -inset-1 bg-gradient-to-br from-mint-500 to-mint-700 rounded-full opacity-30 blur-lg" />
 
                     {/* Avatar container */}
-                    <div className="relative w-28 h-28 rounded-full border-4 border-purple-500 overflow-hidden bg-white/5 shadow-xl shadow-purple-500/20">
+                    <div className="relative w-28 h-28 rounded-full border-4 border-mint-500 overflow-hidden bg-white/5 shadow-xl shadow-mint-500/20">
                         {imageUrl ? (
                             <Image
                                 src={imageUrl}
@@ -43,7 +43,7 @@ export function ProfileHeader({ displayName, spotifyId, imageUrl, country, membe
                                 unoptimized
                             />
                         ) : (
-                            <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-purple-400 bg-white/5">
+                            <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-mint-400 bg-white/5">
                                 {displayName?.charAt(0) || "?"}
                             </div>
                         )}

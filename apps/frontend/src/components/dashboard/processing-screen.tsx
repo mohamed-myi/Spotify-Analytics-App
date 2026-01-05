@@ -11,11 +11,11 @@ export function ProcessingScreen({ message = "Analyzing your music taste..." }: 
     return (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black text-white p-6 overflow-hidden">
             {/* Background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black to-black" />
+            <div className="absolute inset-0 bg-gradient-to-br from-mint-950/20 via-black to-black" />
 
             {/* Ambient glow effects */}
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
-            <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
+            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-mint-500/10 rounded-full blur-3xl animate-pulse" />
+            <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-mint-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
 
             {/* Content */}
             <motion.div
@@ -28,9 +28,9 @@ export function ProcessingScreen({ message = "Analyzing your music taste..." }: 
                 <motion.div
                     animate={{
                         boxShadow: [
-                            "0 0 0px rgba(168, 85, 247, 0)",
-                            "0 0 20px rgba(168, 85, 247, 0.3)",
-                            "0 0 0px rgba(168, 85, 247, 0)"
+                            "0 0 0px rgba(79, 191, 163, 0)",
+                            "0 0 20px rgba(79, 191, 163, 0.3)",
+                            "0 0 0px rgba(79, 191, 163, 0)"
                         ]
                     }}
                     transition={{
@@ -81,7 +81,7 @@ export function ProcessingScreen({ message = "Analyzing your music taste..." }: 
                     className="w-48 h-1 bg-white/10 rounded-full overflow-hidden mt-4"
                 >
                     <motion.div
-                        className="h-full bg-purple-500"
+                        className="h-full bg-mint-500"
                         animate={{
                             x: ["-100%", "100%"]
                         }}

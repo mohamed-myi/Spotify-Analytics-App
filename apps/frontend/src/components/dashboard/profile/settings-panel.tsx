@@ -26,7 +26,7 @@ function Toggle({ label, description, icon, checked, onChange }: ToggleProps) {
             </div>
             <button
                 onClick={() => onChange(!checked)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${checked ? "bg-purple-600" : "bg-white/20"
+                className={`relative w-12 h-6 rounded-full transition-colors ${checked ? "bg-mint-600" : "bg-white/20"
                     }`}
             >
                 <span
@@ -80,8 +80,8 @@ export function SettingsPanel() {
             <div className="backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl p-6">
                 {/* Header */}
                 <div className="flex items-center gap-2 mb-6">
-                    <Settings className="w-5 h-5 text-purple-400" />
-                    <h2 className="text-xl font-semibold text-purple-300">Settings</h2>
+                    <Settings className="w-5 h-5 text-mint-400" />
+                    <h2 className="text-xl font-semibold text-mint-300">Settings</h2>
                 </div>
 
                 {/* Toggles */}
@@ -141,7 +141,7 @@ export function SettingsPanel() {
                                 mutate(updated, false);
                                 await updateSettings({ timezone: tz });
                             }}
-                            className="bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-400 backdrop-blur-md"
+                            className="bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-mint-400 backdrop-blur-md"
                         >
                             <option value="UTC">UTC</option>
                             <option value="America/New_York">Eastern Time</option>

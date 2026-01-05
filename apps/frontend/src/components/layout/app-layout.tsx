@@ -124,7 +124,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                         {/* Logo - Absolute left */}
                         <Link
                             href="/dashboard"
-                            className="absolute left-4 md:left-6 flex items-center justify-center w-10 h-10 rounded-full overflow-hidden hover:opacity-80 transition-opacity shadow-lg shadow-purple-500/30"
+                            className="absolute left-4 md:left-6 flex items-center justify-center w-10 h-10 rounded-full overflow-hidden hover:opacity-80 transition-opacity shadow-lg shadow-mint-500/30"
                         >
                             <Image src="/brand/myi-logo.svg" alt="MYI" width={40} height={40} className="w-full h-full" unoptimized />
                         </Link>
@@ -183,7 +183,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
                             {user && (
                                 <Link href="/dashboard/profile" title="My Profile">
-                                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shadow-lg shadow-purple-500/30 overflow-hidden relative">
+                                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-mint-500 to-mint-700 flex items-center justify-center shadow-lg shadow-mint-500/30 overflow-hidden relative">
                                         {user.image ? (
                                             <Image src={user.image} alt={user.displayName} fill className="object-cover" unoptimized />
                                         ) : (
@@ -240,7 +240,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                             <div className="flex items-center justify-between p-4 border-b border-white/10">
                                 {user && (
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shadow-lg shadow-purple-500/30 overflow-hidden relative">
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-mint-500 to-mint-700 flex items-center justify-center shadow-lg shadow-mint-500/30 overflow-hidden relative">
                                             {user.image ? (
                                                 <Image src={user.image} alt={user.displayName} fill className="object-cover" unoptimized />
                                             ) : (

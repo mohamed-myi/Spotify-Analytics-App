@@ -23,11 +23,11 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-black text-white p-6 relative overflow-hidden">
       {/* Background - Subtle gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black to-black" />
+      <div className="absolute inset-0 bg-gradient-to-br from-mint-950/20 via-black to-black" />
 
       {/* Ambient glow effects */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
-      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl" />
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-mint-500/10 rounded-full blur-3xl" />
+      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-mint-600/10 rounded-full blur-3xl" />
 
       {/* Content */}
       <motion.div
@@ -54,7 +54,7 @@ export default function LandingPage() {
               className="relative"
             >
               {/* Outer glow ring */}
-              <div className="absolute -inset-2 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full opacity-30 blur-xl" />
+              <div className="absolute -inset-2 bg-gradient-to-br from-mint-500 to-mint-700 rounded-full opacity-30 blur-xl" />
 
               {/* Glassmorphic container */}
               <div className="relative backdrop-blur-md bg-white/5 border border-white/20 rounded-full p-3 shadow-2xl">

@@ -108,7 +108,7 @@ function DesktopHistoryTile({
                 </div>
 
                 <div>
-                    <p className="text-sm truncate mb-1 text-white group-hover:text-purple-300 transition-colors">
+                    <p className="text-sm truncate mb-1 text-white group-hover:text-mint-300 transition-colors">
                         {item.name}
                     </p>
                     <p className="text-xs text-white/50 truncate">
@@ -164,7 +164,7 @@ function HistorySection({
 }) {
     return (
         <section>
-            <h2 className="text-purple-200 text-lg md:text-xl font-medium mb-4">
+            <h2 className="text-mint-200 text-lg md:text-xl font-medium mb-4">
                 {section.title}
             </h2>
 

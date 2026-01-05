@@ -6,12 +6,12 @@
     </clipPath>
   </defs>
   
-  <!-- Main purple circle -->
+  <!-- Main mint circle -->
   <circle 
     cx="512" 
     cy="512" 
     r="410" 
-    fill="#7C3AED"
+    fill="#4FBFA3"
   />
   
   <!-- Mark elements (cut out from circle) -->

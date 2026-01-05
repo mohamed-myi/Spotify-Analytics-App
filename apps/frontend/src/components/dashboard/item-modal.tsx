@@ -105,7 +105,7 @@ export function ItemModal({ isOpen, onClose, item }: ItemModalProps) {
                                     {(item.artistSpotifyId || (!item.artist && item.spotifyId)) && (
                                         <button
                                             onClick={() => window.open(`https://open.spotify.com/artist/${!item.artist ? item.spotifyId : item.artistSpotifyId}`, '_blank')}
-                                            className="flex-1 px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 transition-all flex items-center justify-center gap-2 text-sm font-medium"
+                                            className="flex-1 px-4 py-3 rounded-xl bg-mint-600 hover:bg-mint-700 transition-all flex items-center justify-center gap-2 text-sm font-medium"
                                         >
                                             <ExternalLink className="w-4 h-4" />
                                             View Artist
@@ -131,7 +131,7 @@ export function ItemModal({ isOpen, onClose, item }: ItemModalProps) {
                                         </div>
                                         <div className="backdrop-blur-md bg-white/5 rounded-lg p-3 border border-white/10">
                                             <p className="text-white/50 text-xs mb-1">Your Rank</p>
-                                            <p className="text-purple-400 font-semibold">Coming soon</p>
+                                            <p className="text-mint-400 font-semibold">Coming soon</p>
                                         </div>
                                     </div>
                                 </div>

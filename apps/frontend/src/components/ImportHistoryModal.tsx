@@ -78,7 +78,7 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
                 <div className="p-6 space-y-4">
                     {/* File Drop Zone */}
                     <div
-                        className="p-8 border-2 border-dashed border-white/20 hover:border-purple-400/50 rounded-xl text-center transition-colors cursor-pointer backdrop-blur-md bg-white/5"
+                        className="p-8 border-2 border-dashed border-white/20 hover:border-mint-400/50 rounded-xl text-center transition-colors cursor-pointer backdrop-blur-md bg-white/5"
                         onClick={() => fileInputRef.current?.click()}
                     >
                         <input
@@ -102,8 +102,8 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
                     {/* Status Message */}
                     {status && (
                         <div className={`p-4 rounded-xl text-sm backdrop-blur-md ${status.startsWith("Error")
-                                ? "bg-red-500/10 border border-red-400/30 text-red-300"
-                                : "bg-green-500/10 border border-green-400/30 text-green-300"
+                            ? "bg-red-500/10 border border-red-400/30 text-red-300"
+                            : "bg-green-500/10 border border-green-400/30 text-green-300"
                             }`}>
                             {status}
                         </div>
@@ -128,7 +128,7 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
                     <button
                         onClick={handleUpload}
                         disabled={!file || uploading}
-                        className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-6 py-3 rounded-xl bg-mint-600 hover:bg-mint-700 text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {uploading ? "Uploading..." : "Import File"}
                     </button>

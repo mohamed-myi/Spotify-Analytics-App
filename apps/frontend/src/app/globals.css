@@ -4,12 +4,22 @@
   /* Core Colors - Glassmorphic Dark Theme */
   --color-background: #000000;
   --color-surface: #0a0a0a;
-  --color-primary: #A855F7;
-  --color-primary-dark: #7C3AED;
-  --color-primary-light: #C084FC;
+  --color-primary: #9ADBC6;
+  --color-primary-dark: #4FBFA3;
+  --color-primary-light: #D1FAE5;
 
-  /* Purple Accent Gradient */
-  --image-purple-gradient: linear-gradient(to right, #7C3AED, #A855F7);
+  /* Mint Accent Gradient */
+  --image-mint-gradient: linear-gradient(to right, #4FBFA3, #9ADBC6);
+
+  /* Custom Mint Colors for Tailwind */
+  --color-mint-200: #D1FAE5;
+  --color-mint-300: #B5F0D5;
+  --color-mint-400: #9ADBC6;
+  --color-mint-500: #6EC9AE;
+  --color-mint-600: #4FBFA3;
+  --color-mint-700: #3A9A82;
+  --color-mint-900: #1F5244;
+  --color-mint-950: #13302B;
 
   /* Typography */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
@@ -30,10 +40,10 @@
   --text-secondary: rgba(255, 255, 255, 0.6);
   --text-muted: rgba(255, 255, 255, 0.5);
 
-  /* Purple Accent Colors */
-  --purple-glow: rgba(168, 85, 247, 0.3);
-  --purple-badge-bg: rgba(168, 85, 247, 0.2);
-  --purple-badge-border: rgba(192, 132, 252, 0.3);
+  /* Mint Accent Colors */
+  --mint-glow: rgba(79, 191, 163, 0.3);
+  --mint-badge-bg: rgba(154, 219, 198, 0.2);
+  --mint-badge-border: rgba(209, 250, 229, 0.3);
 }
 
 body {
@@ -79,14 +89,14 @@ body {
     scrollbar-width: none;
   }
 
-  /* Purple Glow Effect */
-  .purple-glow {
-    box-shadow: 0 0 20px var(--purple-glow);
+  /* Mint Glow Effect */
+  .mint-glow {
+    box-shadow: 0 0 20px var(--mint-glow);
   }
 
   /* Gradient Text */
   .gradient-text {
-    background: linear-gradient(to right, #A855F7, #C084FC);
+    background: linear-gradient(to right, #9ADBC6, #D1FAE5);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

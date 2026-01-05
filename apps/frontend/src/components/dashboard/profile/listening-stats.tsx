@@ -26,7 +26,7 @@ function StatCard({ icon, label, value, delay }: StatCardProps) {
             className="backdrop-blur-md bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-5 transition-all"
         >
             <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-400/30">
+                <div className="p-3 rounded-xl bg-mint-500/20 text-mint-400 border border-mint-400/30">
                     {icon}
                 </div>
                 <div>
@@ -43,7 +43,7 @@ function StatCard({ icon, label, value, delay }: StatCardProps) {
 export function ListeningStats({ totalPlays, formattedTime, uniqueTracks, uniqueArtists }: ListeningStatsProps) {
     return (
         <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-purple-300">Listening Stats</h2>
+            <h2 className="text-xl font-semibold text-mint-300">Listening Stats</h2>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                     icon={<Music className="w-6 h-6" />}

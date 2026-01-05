@@ -101,10 +101,10 @@ function DesktopTile({
                 <div>
                     <p className="text-sm truncate mb-1 text-white">{item.name}</p>
                     {type === "artist" ? (
-                        showRank && <p className="text-xs text-purple-400">Rank #{index + 1}</p>
+                        showRank && <p className="text-xs text-mint-400">Rank #{index + 1}</p>
                     ) : (
                         <div className="flex items-center gap-2">
-                            {showRank && <span className="text-xs text-purple-400">#{index + 1}</span>}
+                            {showRank && <span className="text-xs text-mint-400">#{index + 1}</span>}
                             <p className="text-xs text-white/50 truncate">{item.artist || "Unknown"}</p>
                         </div>
                     )}
@@ -133,7 +133,7 @@ function MobileTile({
         >
             {/* Rank Number */}
             {showRank && (
-                <span className="text-xs text-purple-400 w-5 text-center font-medium">
+                <span className="text-xs text-mint-400 w-5 text-center font-medium">
                     {index + 1}
                 </span>
             )}
@@ -223,7 +223,7 @@ export function ContentRow({
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                        <h2 className="text-purple-300 text-lg md:text-xl font-medium">
+                        <h2 className="text-mint-300 text-lg md:text-xl font-medium">
                             {title}
                         </h2>
 
@@ -264,7 +264,7 @@ export function ContentRow({
                                                         onRangeChange?.(range.value);
                                                         setIsDropdownOpen(false);
                                                     }}
-                                                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/10 transition-colors ${selectedRange === range.value ? 'text-purple-300' : 'text-white/70'}`}
+                                                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/10 transition-colors ${selectedRange === range.value ? 'text-mint-300' : 'text-white/70'}`}
                                                 >
                                                     {range.label}
                                                 </button>
@@ -318,11 +318,11 @@ export function ContentRow({
             </div>
 
             {/* Mobile Layout - Entire section wrapped in purple glow outline */}
-            <div className="md:hidden rounded-xl border border-purple-500/40 shadow-[0_0_20px_rgba(168,85,247,0.18)] p-4">
+            <div className="md:hidden rounded-xl border border-mint-500/40 shadow-[0_0_20px_rgba(79,191,163,0.18)] p-4">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                        <h2 className="text-purple-300 text-lg font-medium">
+                        <h2 className="text-mint-300 text-lg font-medium">
                             {title}
                         </h2>
 
@@ -362,7 +362,7 @@ export function ContentRow({
                                                     onRangeChange?.(range.value);
                                                     setIsDropdownOpen(false);
                                                 }}
-                                                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/10 transition-colors ${selectedRange === range.value ? 'text-purple-300' : 'text-white/70'}`}
+                                                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/10 transition-colors ${selectedRange === range.value ? 'text-mint-300' : 'text-white/70'}`}
                                             >
                                                 {range.label}
                                             </button>

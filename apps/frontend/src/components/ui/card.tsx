@@ -31,7 +31,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
                     "backdrop-blur-md bg-white/5 hover:bg-white/10",
                     "border border-white/10 hover:border-white/20",
                     "transition-all duration-300",
-                    "shadow-xl hover:shadow-purple-500/20",
+                    "shadow-xl hover:shadow-mint-500/20",
                     variants[variant],
                     className
                 )}
