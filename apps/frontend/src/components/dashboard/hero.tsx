@@ -58,7 +58,7 @@ export function Hero({ title, subtitle, description, songOfTheDayName, songOfThe
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
                                 transition={{ duration: 0.2 }}
-                                className="px-4 py-1.5 rounded-lg bg-mint-600 text-white text-sm font-medium inline-flex items-center gap-2"
+                                className="px-4 py-1.5 rounded-lg bg-neutral-900 border border-mint-500 text-white text-sm font-medium inline-flex items-center gap-2"
                             >
                                 <ModeIcon className="w-3.5 h-3.5" />
                                 {dynamicSubtitle}
