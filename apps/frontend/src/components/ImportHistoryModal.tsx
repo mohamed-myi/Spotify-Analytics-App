@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Upload, X, FileJson, Check, AlertCircle, Loader2, Trash2 } from "lucide-react";
+import { Upload, X, FileJson, Check, AlertCircle, Loader2, Trash2, Download, Search, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useImport } from "@/hooks/use-import";
-import type { JobStatus, FileUploadState, ImportJob } from "@/lib/import-types";
+import type { JobStatus, FileUploadState, ImportJob, UnresolvedTrack, ImportProgress } from "@/lib/import-types";
 
 interface ImportHistoryModalProps {
     isOpen: boolean;
@@ -40,12 +40,14 @@ function formatDate(dateString: string): string {
     });
 }
 
-// Progress Bar Component
-function ProgressBar({ progress, total }: { progress: number; total: number }) {
+function ProgressBar({ progress, total, label }: { progress: number; total: number; label?: string }) {
     const percentage = total > 0 ? Math.round((progress / total) * 100) : 0;
 
     return (
         <div className="space-y-1">
+            {label && (
+                <div className="text-xs text-white/60 mb-1">{label}</div>
+            )}
             <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
                     className="h-full bg-mint-500 transition-all duration-300 ease-out"
@@ -60,7 +62,121 @@ function ProgressBar({ progress, total }: { progress: number; total: number }) {
     );
 }
 
-// File Item in Upload Queue (before upload)
+function TwoPhaseProgress({ progress }: { progress: ImportProgress }) {
+    const phase = progress.phase;
+    const isResolving = phase === 'resolving';
+
+    // Calculate combined progress percentage for the overall bar
+    const resolveWeight = 0.6; // Track resolution is ~60% of the work
+    const createWeight = 0.4;  // Event creation is ~40%
+
+    let overallPercentage = 0;
+    if (phase === 'resolving' && progress.totalUniqueTracks) {
+        overallPercentage = Math.round(((progress.resolvedTracks || 0) / progress.totalUniqueTracks) * resolveWeight * 100);
+    } else if (phase === 'creating' && progress.totalRecords) {
+        overallPercentage = Math.round(resolveWeight * 100) +
+            Math.round((progress.processedRecords / progress.totalRecords) * createWeight * 100);
+    }
+
+    return (
+        <div className="space-y-3">
+            {/* Phase Indicator */}
+            <div className="flex items-center gap-2 text-xs">
+                <div className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 rounded-full",
+                    isResolving ? "bg-mint-500/20 text-mint-300" : "bg-white/10 text-white/40"
+                )}>
+                    <Search className="w-3 h-3" />
+                    <span>Resolving</span>
+                </div>
+                <div className="w-4 h-px bg-white/20" />
+                <div className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 rounded-full",
+                    !isResolving ? "bg-mint-500/20 text-mint-300" : "bg-white/10 text-white/40"
+                )}>
+                    <Database className="w-3 h-3" />
+                    <span>Creating</span>
+                </div>
+            </div>
+
+            {/* Overall Progress */}
+            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                <div
+                    className="h-full bg-mint-500 transition-all duration-300 ease-out"
+                    style={{ width: `${overallPercentage}%` }}
+                />
+            </div>
+
+            {/* Phase-specific stats */}
+            {isResolving && progress.totalUniqueTracks && (
+                <div className="text-xs text-white/60">
+                    Resolving tracks: {formatNumber(progress.resolvedTracks || 0)} / {formatNumber(progress.totalUniqueTracks)}
+                </div>
+            )}
+            {!isResolving && progress.totalRecords > 0 && (
+                <div className="text-xs text-white/60">
+                    Creating events: {formatNumber(progress.processedRecords)} / {formatNumber(progress.totalRecords)}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function UnresolvedReport({ tracks, jobId }: { tracks: UnresolvedTrack[]; jobId?: string }) {
+    const handleDownload = useCallback(() => {
+        // Generate CSV content
+        const headers = ['Track Name', 'Artist Name', 'Occurrences'];
+        const rows = tracks.map(t => [
+            `"${t.trackName.replace(/"/g, '""')}"`,
+            `"${t.artistName.replace(/"/g, '""')}"`,
+            t.occurrences.toString()
+        ]);
+        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+
+        // Create download
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `unresolved-tracks-${jobId || 'export'}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }, [tracks, jobId]);
+
+    if (tracks.length === 0) return null;
+
+    return (
+        <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-amber-300 text-xs font-medium">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {tracks.length} track{tracks.length !== 1 ? 's' : ''} could not be matched
+                </div>
+                <button
+                    onClick={handleDownload}
+                    className="flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200 transition-colors"
+                >
+                    <Download className="w-3 h-3" />
+                    Export CSV
+                </button>
+            </div>
+            <div className="max-h-24 overflow-y-auto space-y-1">
+                {tracks.slice(0, 5).map((track, i) => (
+                    <div key={i} className="text-xs text-white/60 truncate">
+                        {track.trackName} — {track.artistName}
+                        <span className="text-white/30 ml-1">({track.occurrences}x)</span>
+                    </div>
+                ))}
+                {tracks.length > 5 && (
+                    <div className="text-xs text-white/40">
+                        ...and {tracks.length - 5} more
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function QueuedFileItem({
     file,
     onRemove,
@@ -86,7 +202,6 @@ function QueuedFileItem({
     );
 }
 
-// Active Upload Item (with progress)
 function UploadItem({
     upload,
     onRemove,
@@ -96,6 +211,7 @@ function UploadItem({
 }) {
     const status = upload.progress?.status ?? "PENDING";
     const isTerminal = status === "COMPLETED" || status === "FAILED";
+    const hasTwoPhaseProgress = upload.progress?.phase !== undefined;
 
     return (
         <div className="p-4 rounded-xl backdrop-blur-md bg-white/5 border border-white/10 space-y-3">
@@ -127,28 +243,39 @@ function UploadItem({
             </div>
 
             {status === "PROCESSING" && upload.progress && (
-                <ProgressBar
-                    progress={upload.progress.processedRecords}
-                    total={upload.progress.totalRecords}
-                />
+                hasTwoPhaseProgress ? (
+                    <TwoPhaseProgress progress={upload.progress} />
+                ) : (
+                    <ProgressBar
+                        progress={upload.progress.processedRecords}
+                        total={upload.progress.totalRecords}
+                    />
+                )
             )}
 
             {status === "COMPLETED" && upload.progress && (
-                <div className="flex items-center gap-4 text-xs">
-                    <span className="text-green-400 flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" />
-                        {formatNumber(upload.progress.addedRecords)} added
-                    </span>
-                    <span className="text-white/40">
-                        {formatNumber(upload.progress.skippedRecords)} skipped
-                    </span>
-                </div>
+                <>
+                    <div className="flex items-center gap-4 text-xs">
+                        <span className="text-green-400 flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" />
+                            {formatNumber(upload.progress.addedRecords)} added
+                        </span>
+                        <span className="text-white/40">
+                            {formatNumber(upload.progress.skippedRecords)} skipped
+                        </span>
+                    </div>
+                    {upload.progress.unresolvedTracks && upload.progress.unresolvedTracks.length > 0 && (
+                        <UnresolvedReport
+                            tracks={upload.progress.unresolvedTracks}
+                            jobId={upload.jobId}
+                        />
+                    )}
+                </>
             )}
         </div>
     );
 }
 
-// History Job Item
 function JobItem({ job }: { job: ImportJob }) {
     return (
         <div className="p-4 rounded-xl backdrop-blur-md bg-white/5 border border-white/10">
@@ -182,7 +309,6 @@ function JobItem({ job }: { job: ImportJob }) {
     );
 }
 
-// Empty State Component
 function EmptyState({ icon: Icon, message }: { icon: React.ElementType; message: string }) {
     return (
         <div className="flex flex-col items-center justify-center py-12 text-white/40">
@@ -262,15 +388,12 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in">
-            {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-black/80 backdrop-blur-md"
                 onClick={handleClose}
             />
 
-            {/* Modal Content */}
             <div className="relative w-full max-w-lg backdrop-blur-2xl bg-gradient-to-b from-white/10 to-white/5 border border-white/20 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-                {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
                     <h2 className="text-xl font-semibold text-white">Import History</h2>
                     <button
@@ -281,7 +404,6 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
                     </button>
                 </div>
 
-                {/* Tab Navigation */}
                 <div className="flex gap-2 px-6 py-3 border-b border-white/10">
                     <button
                         onClick={() => setActiveTab("upload")}
@@ -312,11 +434,9 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
                     </button>
                 </div>
 
-                {/* Tab Content */}
                 <div className="flex-1 overflow-y-auto p-6">
                     {activeTab === "upload" && (
                         <div className="space-y-4">
-                            {/* Drop Zone */}
                             <div
                                 className={cn(
                                     "p-8 border-2 border-dashed rounded-xl text-center transition-colors cursor-pointer backdrop-blur-md",
@@ -342,7 +462,7 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
                                     Drop files here or click to select
                                 </p>
                                 <p className="text-xs text-white/40 mt-1">
-                                    endsong.json files from Spotify data export
+                                    Supports endsong.json and StreamingHistory_music.json
                                 </p>
                             </div>
 
@@ -362,7 +482,6 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
                                 </div>
                             )}
 
-                            {/* Active Uploads */}
                             {uploads.length > 0 && (
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
@@ -389,7 +508,6 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
                                 </div>
                             )}
 
-                            {/* Empty State */}
                             {uploadQueue.length === 0 && uploads.length === 0 && (
                                 <EmptyState
                                     icon={FileJson}
@@ -417,7 +535,6 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
                     )}
                 </div>
 
-                {/* Footer Actions (Upload Tab Only) */}
                 {activeTab === "upload" && (
                     <div className="flex justify-end gap-3 p-6 pt-0 border-t border-white/10 mt-auto">
                         <button

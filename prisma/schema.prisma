@@ -6,8 +6,6 @@ datasource db {
   provider = "postgresql"
 }
 
-// ENUMS - Type Safety Guards
-
 enum Source {
   API
   IMPORT
@@ -32,8 +30,6 @@ enum JobStatus {
   COMPLETED
   FAILED
 }
-
-// USER & AUTH
 
 model User {
   id              String   @id @default(cuid())
@@ -80,8 +76,6 @@ model SpotifyAuth {
   @@map("spotify_auth")
 }
 
-// MUSIC CATALOG (Global, Shared Across Users)
-
 model Track {
   id              String   @id @default(cuid())
   spotifyId       String   @unique @map("spotify_id")
@@ -97,7 +91,7 @@ model Track {
   spotifyTopTracks SpotifyTopTrack[]
 
   @@index([spotifyId])
-  @@index([albumId]) // FK index: "Find all tracks in Album X"
+  @@index([albumId])
   @@map("tracks")
 }
 
@@ -113,7 +107,7 @@ model Artist {
   spotifyTopArtists SpotifyTopArtist[]
 
   @@index([spotifyId])
-  @@index([genres], type: Gin) // Fast array containment queries
+  @@index([genres], type: Gin)
   @@map("artists")
 }
 
@@ -138,7 +132,7 @@ model TrackArtist {
   artist          Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@id([trackId, artistId])
-  @@index([artistId]) // FK index: "Find all tracks for Artist X"
+  @@index([artistId])
   @@map("track_artists")
 }
 
@@ -160,7 +154,7 @@ model ListeningEvent {
   @@unique([userId, trackId, playedAt])
   @@index([userId, playedAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
-  @@index([trackId]) // FK index for cascade deletes
+  @@index([trackId])
   @@map("listening_events")
 }
 
@@ -176,7 +170,7 @@ model UserTrackStats {
 
   @@id([userId, trackId])
   @@index([userId, playCount(sort: Desc)])
-  @@index([trackId]) // FK index for cascade deletes
+  @@index([trackId])
   @@map("user_track_stats")
 }
 
@@ -191,7 +185,7 @@ model UserArtistStats {
 
   @@id([userId, artistId])
   @@index([userId, playCount(sort: Desc)])
-  @@index([artistId]) // FK index for cascade deletes
+  @@index([artistId])
   @@map("user_artist_stats")
 }
 
@@ -282,7 +276,7 @@ model SpotifyTopTrack {
 
   @@unique([userId, term, rank])
   @@unique([userId, term, trackId])
-  @@index([trackId]) // FK index for cascade deletes
+  @@index([trackId])
   @@map("spotify_top_tracks")
 }
 
@@ -299,6 +293,18 @@ model SpotifyTopArtist {
 
   @@unique([userId, term, rank])
   @@unique([userId, term, artistId])
-  @@index([artistId]) // FK index for cascade deletes
+  @@index([artistId])
   @@map("spotify_top_artists")
+}
+
+model TrackResolutionCache {
+  id              String   @id @default(cuid())
+  trackName       String   @map("track_name")
+  artistName      String   @map("artist_name")
+  normalizedKey   String   @unique @map("normalized_key")
+  spotifyTrackId  String?  @map("spotify_track_id")
+  resolvedAt      DateTime @default(now()) @map("resolved_at")
+
+  @@index([normalizedKey])
+  @@map("track_resolution_cache")
 }

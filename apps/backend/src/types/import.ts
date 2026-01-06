@@ -24,11 +24,23 @@ export interface ParsedImportEvent {
     albumName: string;
 }
 
+export interface UnresolvedTrack {
+    trackName: string;
+    artistName: string;
+    occurrences: number;
+}
+
 export interface ImportProgress {
     status: JobStatus;
+    phase?: 'resolving' | 'creating';
+    totalUniqueTracks?: number;
+    resolvedTracks?: number;
     totalRecords: number;
     processedRecords: number;
     addedRecords: number;
     skippedRecords: number;
+    unresolvedTracks?: UnresolvedTrack[];
     errorMessage?: string;
 }
+
+export type ImportFormat = 'extended' | 'basic';

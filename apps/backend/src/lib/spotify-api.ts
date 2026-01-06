@@ -183,3 +183,27 @@ export async function getAlbumsBatch(
     const response = await fetchWithRetry<SpotifyAlbumsBatchResponse>(url, accessToken);
     return response.albums;
 }
+
+export interface SpotifySearchResult {
+    tracks: {
+        items: SpotifyTrack[];
+        total: number;
+    };
+}
+
+export async function searchTracks(
+    accessToken: string,
+    query: string,
+    limit: number = 5
+): Promise<SpotifyTrack[]> {
+    if (!query.trim()) return [];
+
+    const params = new URLSearchParams({
+        q: query,
+        type: 'track',
+        limit: String(Math.min(limit, 50)),
+    });
+    const url = `${SPOTIFY_API_URL}/search?${params.toString()}`;
+    const response = await fetchWithRetry<SpotifySearchResult>(url, accessToken);
+    return response.tracks.items;
+}

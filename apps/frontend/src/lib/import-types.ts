@@ -1,13 +1,23 @@
-// Import Types: Matches backend response shapes from apps/backend/src/types/import.ts
+// Mirrors backend types: apps/backend/src/types/import.ts
 
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
+export interface UnresolvedTrack {
+    trackName: string;
+    artistName: string;
+    occurrences: number;
+}
+
 export interface ImportProgress {
     status: JobStatus;
+    phase?: 'resolving' | 'creating';
+    totalUniqueTracks?: number;
+    resolvedTracks?: number;
     totalRecords: number;
     processedRecords: number;
     addedRecords: number;
     skippedRecords: number;
+    unresolvedTracks?: UnresolvedTrack[];
     errorMessage?: string;
 }
 

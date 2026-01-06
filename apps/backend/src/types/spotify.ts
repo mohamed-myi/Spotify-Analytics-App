@@ -43,6 +43,8 @@ export interface SpotifyTrack {
     preview_url: string | null;
     album: SpotifyAlbum;
     artists: SpotifyArtist[];
+    popularity?: number;
+    explicit?: boolean;
 }
 
 export interface SpotifyAlbum {
