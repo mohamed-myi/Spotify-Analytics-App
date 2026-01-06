@@ -19,27 +19,70 @@ export interface ImportJob {
     fileName: string;
 }
 
+// Detects import format using field pattern matching with JSON parse fallback.
+// Never silently defaults; throws explicit error if format cannot be determined.
 function detectImportFormat(buffer: Buffer): 'basic' | 'extended' {
-    try {
-        // Parse enough to find the first record
-        const content = buffer.toString('utf-8', 0, Math.min(buffer.length, 2000));
-        const match = content.match(/\{[^{}]*\}/);
-        if (!match) return 'extended'; // Default to extended
+    // Read more content to ensure we capture at least one complete record
+    const rawContent = buffer.toString('utf-8', 0, Math.min(buffer.length, 10000));
 
-        const firstRecord = JSON.parse(match[0]);
+    // Remove BOM (byte order mark) if present
+    const content = rawContent.replace(/^\uFEFF/, '');
 
-        if (isBasicFormat(firstRecord)) {
-            return 'basic';
-        }
-        if (isExtendedFormat(firstRecord)) {
-            return 'extended';
-        }
+    // Check for format-specific field patterns using regex
+    // This is more reliable than JSON parsing because it handles pretty-printed JSON
+    const hasExtendedFields = /"spotify_track_uri"\s*:/.test(content) ||
+        (/"ts"\s*:/.test(content) && /"ms_played"\s*:/.test(content));
 
-        return detectFormat(firstRecord);
-    } catch {
-        log.warn('Failed to detect format, defaulting to extended');
+    const hasBasicFields = /"endTime"\s*:/.test(content) &&
+        /"artistName"\s*:/.test(content) &&
+        /"trackName"\s*:/.test(content) &&
+        /"msPlayed"\s*:/.test(content);
+
+    // Extended format takes precedence (it has unique fields)
+    if (hasExtendedFields) {
+        log.info('Detected extended format via field patterns (endsong.json)');
         return 'extended';
     }
+
+    if (hasBasicFields) {
+        log.info('Detected basic format via field patterns (StreamingHistory_music.json)');
+        return 'basic';
+    }
+
+    // Fallback to JSON parsing if field patterns didn't match
+    log.warn({ contentPreview: content.slice(0, 300) }, 'Field pattern detection inconclusive, attempting JSON parse');
+
+    try {
+        // Try to extract and parse first JSON object
+        const match = content.match(/\{[^{}]*\}/);
+        if (match) {
+            const firstRecord = JSON.parse(match[0]);
+
+            if (isBasicFormat(firstRecord)) {
+                log.info('Detected basic format via JSON parse');
+                return 'basic';
+            }
+            if (isExtendedFormat(firstRecord)) {
+                log.info('Detected extended format via JSON parse');
+                return 'extended';
+            }
+
+            // Last attempt: use the generic detectFormat function
+            const detected = detectFormat(firstRecord);
+            log.info({ detected }, 'Detected format via generic detection');
+            return detected;
+        }
+    } catch (parseError) {
+        log.error({ parseError, contentPreview: content.slice(0, 500) }, 'JSON parse failed during format detection');
+    }
+
+    // Fail with clear error message.
+    const error = new Error(
+        'Unable to detect import file format. Please ensure you are uploading a valid Spotify streaming history JSON file ' +
+        '(either endsong.json from Extended History or StreamingHistory_music.json from Basic History).'
+    );
+    log.error({ contentPreview: content.slice(0, 500) }, error.message);
+    throw error;
 }
 
 export async function runImport(
@@ -47,7 +90,15 @@ export async function runImport(
     job?: Job<ImportJob>
 ): Promise<void> {
     const buffer = Buffer.from(data.fileData, 'base64');
-    const format = detectImportFormat(buffer);
+
+    // Format detection can throw; let it propagate to fail the job with clear error
+    let format: 'basic' | 'extended';
+    try {
+        format = detectImportFormat(buffer);
+    } catch (detectionError) {
+        log.error({ jobId: data.jobId, fileName: data.fileName, error: detectionError }, 'Format detection failed');
+        throw detectionError;
+    }
 
     log.info({ jobId: data.jobId, format, fileName: data.fileName }, 'Detected import format');
 

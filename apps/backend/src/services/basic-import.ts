@@ -275,6 +275,41 @@ export async function processBasicImportStream(
 
         skippedRecords += events.length - resolvedEvents.length;
 
+        // Check if import actually processed any records meaningfully
+        if (addedRecords === 0 && totalRecords > 0) {
+            let errorMessage: string;
+
+            if (uniqueTracks.size === 0) {
+                errorMessage =
+                    `Import failed: No valid tracks found in file (${totalRecords} records, all skipped). ` +
+                    'Records may have been filtered due to play time being less than 5 seconds.';
+            } else if (unresolvedTracks.length === uniqueTracks.size) {
+                errorMessage =
+                    `Import failed: Could not resolve any tracks via Spotify search (${uniqueTracks.size} unique tracks, all unresolved). ` +
+                    'This may indicate an issue with your Spotify authentication or the track names in the file.';
+            } else {
+                errorMessage =
+                    `Import completed but no new records were added (${totalRecords} total, ${skippedRecords} skipped). ` +
+                    'All tracks may have already been imported previously.';
+            }
+
+            log.warn({ totalRecords, skippedRecords, addedRecords, uniqueTracks: uniqueTracks.size, unresolvedTracks: unresolvedTracks.length }, errorMessage);
+
+            await updateProgress('creating', uniqueTracks.size, resolvedCount, JobStatus.FAILED, errorMessage);
+
+            await prisma.importJob.update({
+                where: { id: jobId },
+                data: {
+                    status: JobStatus.FAILED,
+                    errorMessage,
+                    totalEvents: totalRecords,
+                    processedEvents: processedRecords,
+                    completedAt: new Date(),
+                },
+            });
+            return;
+        }
+
         await updateProgress('creating', uniqueTracks.size, resolvedCount, JobStatus.COMPLETED);
 
         await prisma.importJob.update({

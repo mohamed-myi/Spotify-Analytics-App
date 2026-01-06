@@ -106,6 +106,30 @@ export async function processImportStream(
             processedRecords += batch.length;
         }
 
+        // Check if import actually processed any records
+        // If all records were skipped, this likely indicates wrong format detection
+        if (addedRecords === 0 && totalRecords > 0) {
+            const errorMessage =
+                `Import completed but no records were added (${totalRecords} total, ${skippedRecords} skipped). ` +
+                'This may indicate the file is in Basic Streaming History format (StreamingHistory_music.json) ' +
+                'which requires track resolution. Please verify you uploaded the correct file type.';
+
+            console.warn('Import validation failed:', { totalRecords, skippedRecords, addedRecords });
+            await updateProgress(JobStatus.FAILED, errorMessage);
+
+            await prisma.importJob.update({
+                where: { id: jobId },
+                data: {
+                    status: JobStatus.FAILED,
+                    errorMessage,
+                    totalEvents: totalRecords,
+                    processedEvents: processedRecords,
+                    completedAt: new Date(),
+                },
+            });
+            return;
+        }
+
         await updateProgress(JobStatus.COMPLETED);
 
         await prisma.importJob.update({
