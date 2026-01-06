@@ -148,7 +148,7 @@ describe('Import Routes', () => {
 
             expect(response.statusCode).toBe(200);
             const body = response.json();
-            expect(body.message).toBe('Import started');
+            expect(body.message).toBe('Import queued');
             expect(body.jobId).toContain('import_user-123_');
             expect(body.statusUrl).toContain('/api/me/import/status?jobId=');
 
