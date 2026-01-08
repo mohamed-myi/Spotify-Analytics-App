@@ -22,8 +22,8 @@ import { generateRequestId, logger } from './lib/logger';
 import { globalErrorHandler } from './lib/error-handler';
 
 const CORS_ORIGINS = process.env.NODE_ENV === 'production'
-  ? ['https://myi-v3-frontend.vercel.app']
-  : ['http://127.0.0.1:3000', 'http://localhost:3000', 'https://myi-v3-frontend.vercel.app'];
+  ? [process.env.FRONTEND_URL || 'http://localhost:3000']
+  : ['http://127.0.0.1:3000', 'http://localhost:3000'];
 
 export const build = async () => {
   const server = Fastify({
