@@ -25,22 +25,22 @@ export default function PlaylistsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
                         <PlaylistFeatureTile
                             icon={Shuffle}
-                            title="Smart Shuffle"
-                            description="Randomize any playlist with smart artist separation to avoid repetition."
+                            title="True Shuffle"
+                            description="Tired of the same songs in your shuffle? Time to truly randomize it.."
                             onClick={() => setActiveModal('shuffle')}
                         />
 
                         <PlaylistFeatureTile
                             icon={BarChart3}
-                            title="Top 50 Stats"
+                            title="Top 50 Songs"
                             description="Create a playlist of your top 50 tracks from any time range."
                             onClick={() => setActiveModal('top50')}
                         />
 
                         <PlaylistFeatureTile
                             icon={Clock}
-                            title="Recent History"
-                            description="Compile your last 100+ listened tracks into a single playlist."
+                            title="Flashback Playlist"
+                            description="Pick any time range and make a take a trip down memory lane."
                             onClick={() => setActiveModal('recent')}
                         />
                     </div>
