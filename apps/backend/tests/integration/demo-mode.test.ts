@@ -1,3 +1,21 @@
+import { config } from 'dotenv';
+import { resolve } from 'path';
+
+// Load env vars before importing anything else
+config({ path: resolve(__dirname, '../../../../.env') });
+
+// Mock Redis before importing app
+jest.mock('../../src/lib/redis', () => ({
+    redis: {
+        get: jest.fn(),
+        set: jest.fn(),
+        del: jest.fn(),
+        on: jest.fn(),
+        quit: jest.fn(),
+    },
+    closeRedis: jest.fn(),
+}));
+
 import { build } from '../../src/index';
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../../src/lib/prisma';
