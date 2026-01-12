@@ -230,13 +230,22 @@ export function ShuffleModal({ isOpen, onClose }: ShuffleModalProps) {
                         <div>
                             <label className="block text-sm font-medium text-white/60 mb-3">{UI.PLAYLIST.SHUFFLE.INPUT.SELECT_SOURCE_LABEL}</label>
 
-                            {isLoadingPlaylists ? (
+                            {isDemo ? (
+                                <div className="h-[320px] rounded-xl bg-neutral-800/50 border border-white/10 flex flex-col items-center justify-center p-6 text-center">
+                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                                        <Shuffle className="w-8 h-8 text-white/20" />
+                                    </div>
+                                    <h3 className="text-lg font-medium text-white mb-2">Feature Unavailable</h3>
+                                    <p className="text-white/40 max-w-[280px]">
+                                        Creating new shuffle playlists is disabled in demo mode. Sign in to your account to use this feature.
+                                    </p>
+                                </div>
+                            ) : isLoadingPlaylists ? (
                                 <div className="flex items-center justify-center py-8">
                                     <Loader2 className="w-6 h-6 text-mint-500 animate-spin" />
                                 </div>
                             ) : (
                                 <>
-                                    {/* ... playlist list (no text to replace inside dynamic items except potentially helper text) ... */}
                                     <div className="h-[320px] overflow-y-auto rounded-xl bg-neutral-800/50 border border-white/10 p-2 space-y-1">
                                         {playlists.map((playlist, index) => (
                                             <button
@@ -247,7 +256,6 @@ export function ShuffleModal({ isOpen, onClose }: ShuffleModalProps) {
                                                     : 'hover:bg-white/5 border border-transparent'
                                                     }`}
                                             >
-                                                {/* ... content ... */}
                                                 <span className="text-xs text-white/40 w-5 text-center shrink-0">
                                                     {index + 1}
                                                 </span>
