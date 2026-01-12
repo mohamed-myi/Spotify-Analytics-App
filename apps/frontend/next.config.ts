@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-// Backend URL for API proxy (Railway in production, local in dev)
+// Backend URL for API proxy (AWS EC2 in production, local in dev)
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:3001";
 
 const nextConfig: NextConfig = {
