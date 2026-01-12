@@ -131,7 +131,20 @@ export default function LandingPage() {
             )}
           </button>
 
-          {/* Try Demo Button for unauthenticated */}
+          {/* Logout Button for Authenticated Users */}
+          {isAuthenticated && (
+            <button
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" });
+                window.location.reload();
+              }}
+              className="text-sm text-white/50 hover:text-white transition-colors hover:underline mt-2"
+            >
+              Logout
+            </button>
+          )}
+
+          {/* Try Demo Button for Unauthenticated */}
           {!isAuthenticated && !isLoading && (
             <a
               href="/api/auth/demo"

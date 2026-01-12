@@ -240,15 +240,15 @@ export async function authRoutes(fastify: FastifyInstance) {
             });
         }
 
-        // Set session cookies (same as real auth)
+        // Set session cookies (session-only for demo, no maxAge)
         reply.setCookie('session', DEMO_USER_ID, {
             ...COOKIE_OPTIONS,
-            maxAge: 60 * 60 * 24, // 24 hours for demo
+            // No maxAge means session cookie (clears on browser close)
         });
         reply.setCookie('auth_status', 'authenticated', {
             ...COOKIE_OPTIONS,
             httpOnly: false,
-            maxAge: 60 * 60 * 24,
+            // No maxAge for demo
         });
 
         return reply.redirect(`${FRONTEND_URL}/dashboard`);
