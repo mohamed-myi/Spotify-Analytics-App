@@ -59,7 +59,9 @@ export default function DashboardPage() {
                     songOfTheDayName={songOfTheDay?.name}
                     songOfTheDayArtist={songOfTheDay?.artist}
                     songOfTheDayContext={songOfTheDay?.context}
+                    songOfTheDaySpotifyId={songOfTheDay?.spotifyId}
                     topArtistName={heroArtists?.[0]?.name}
+                    topArtistSpotifyId={heroArtists?.[0]?.spotifyId}
                 />
 
                 <div className="-mt-32 relative z-20 space-y-4">

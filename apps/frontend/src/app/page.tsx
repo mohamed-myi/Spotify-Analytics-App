@@ -144,22 +144,28 @@ export default function LandingPage() {
             </button>
           )}
 
+          {/* Development Mode Disclaimer */}
+          {!isAuthenticated && !isLoading && (
+            <div className="mt-6 max-w-sm backdrop-blur-md bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-center">
+              <p className="text-amber-200/90 text-sm font-medium mb-1">
+                In Development
+              </p>
+              <p className="text-white/60 text-xs leading-relaxed">
+                Due to Spotify&apos;s API policies, only registered accounts can login.
+                Try the demo below to get a feel for the project!
+              </p>
+            </div>
+          )}
+
           {/* Try Demo Button for Unauthenticated */}
           {!isAuthenticated && !isLoading && (
             <a
               href="/api/auth/demo"
-              className="flex items-center gap-2 px-6 py-3 rounded-full backdrop-blur-md bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/80 hover:text-white text-sm transition-all duration-300"
+              className="flex items-center gap-2 px-6 py-3 rounded-full backdrop-blur-md bg-mint-500/20 hover:bg-mint-500/30 border border-mint-500/40 hover:border-mint-500/60 text-mint-200 hover:text-white text-sm font-medium transition-all duration-300"
             >
               <Sparkles className="w-4 h-4" />
               Try Demo
             </a>
-          )}
-
-          {/* Footer note */}
-          {!isAuthenticated && !isLoading && (
-            <p className="text-xs text-white/30 mt-4">
-              Connect your Spotify account or explore with demo data
-            </p>
           )}
         </motion.div>
       </motion.div>
@@ -167,7 +173,7 @@ export default function LandingPage() {
       {/* Bottom branding */}
       <div className="absolute bottom-6 text-center">
         <p className="text-xs text-white/20 tracking-widest">
-          MYI • Music Intelligence
+          Brought to you by MYI
         </p>
       </div>
     </div>

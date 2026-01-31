@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { Upload, X, FileJson, Check, AlertCircle, Loader2, Trash2, Download, Search, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useImport } from "@/hooks/use-import";
+import { useDemoMode } from "@/hooks/use-demo-mode";
 import type { JobStatus, FileUploadState, ImportJob, UnresolvedTrack, ImportProgress } from "@/lib/import-types";
 
 interface ImportHistoryModalProps {
@@ -293,7 +294,7 @@ function UploadItem({
 
 function JobItem({ job }: { job: ImportJob }) {
     const isActive = job.status === "PENDING" || job.status === "PROCESSING";
-    
+
     return (
         <div className="p-4 rounded-xl backdrop-blur-md bg-white/5 border border-white/10">
             <div className="flex items-start gap-3">
@@ -357,6 +358,8 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
         isLoadingJobs,
         reset,
     } = useImport();
+
+    const { isDemo } = useDemoMode();
 
     const handleClose = useCallback(() => {
         // Only reset if no active jobs
@@ -565,10 +568,15 @@ export function ImportHistoryModal({ isOpen, onClose }: ImportHistoryModalProps)
                         </button>
                         <button
                             onClick={startUpload}
-                            disabled={uploadQueue.length === 0 || isUploading}
-                            className="px-6 py-3 rounded-xl bg-mint-600 hover:bg-mint-700 text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            disabled={uploadQueue.length === 0 || isUploading || isDemo}
+                            className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${isDemo
+                                ? 'bg-neutral-800 text-white/40 cursor-not-allowed'
+                                : 'bg-mint-600 hover:bg-mint-700 text-white disabled:opacity-50 disabled:cursor-not-allowed'
+                                }`}
                         >
-                            {isUploading ? (
+                            {isDemo ? (
+                                "Demo Unavailable"
+                            ) : isUploading ? (
                                 <>
                                     <Loader2 className="w-4 h-4 animate-spin" />
                                     Uploading...

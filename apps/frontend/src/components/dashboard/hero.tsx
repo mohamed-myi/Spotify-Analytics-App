@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Info, Music, User } from "lucide-react";
+import { Music, User } from "lucide-react";
 import { useBackgroundMode } from "@/contexts/background-mode-context";
 
 interface HeroProps {
@@ -12,10 +12,12 @@ interface HeroProps {
     songOfTheDayName?: string;
     songOfTheDayArtist?: string;
     songOfTheDayContext?: string;
+    songOfTheDaySpotifyId?: string | null;
     topArtistName?: string;
+    topArtistSpotifyId?: string;
 }
 
-export function Hero({ title, subtitle, description, songOfTheDayName, songOfTheDayArtist, songOfTheDayContext, topArtistName }: HeroProps) {
+export function Hero({ title, subtitle, description, songOfTheDayName, songOfTheDayArtist, songOfTheDayContext, songOfTheDaySpotifyId, topArtistName, topArtistSpotifyId }: HeroProps) {
     const { mode } = useBackgroundMode();
 
     // Dynamic content based on mode
@@ -94,16 +96,21 @@ export function Hero({ title, subtitle, description, songOfTheDayName, songOfThe
                         </motion.p>
                     </AnimatePresence>
 
-                    {/* Buttons - Responsive layout */}
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4">
-                        <button className="px-6 py-3 rounded-full bg-white text-black hover:scale-105 transition-transform flex items-center justify-center gap-2 shadow-xl font-medium">
-                            <Play className="w-4 h-4 fill-black" />
-                            {mode === "song-of-the-day" ? "Play Song" : "Play Artist"}
-                        </button>
-                        <button className="px-6 py-3 rounded-full backdrop-blur-md bg-white/10 hover:bg-white/20 border border-white/20 transition-all flex items-center justify-center gap-2 font-medium">
-                            <Info className="w-4 h-4" />
-                            {mode === "song-of-the-day" ? "Track Info" : "Artist Info"}
-                        </button>
+                    {/* Button - Centered */}
+                    <div className="flex justify-center pt-4">
+                        <a
+                            href={mode === "song-of-the-day" && songOfTheDaySpotifyId
+                                ? `https://open.spotify.com/track/${songOfTheDaySpotifyId}`
+                                : topArtistSpotifyId
+                                    ? `https://open.spotify.com/artist/${topArtistSpotifyId}`
+                                    : "#"
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-6 py-3 rounded-full bg-white text-black hover:scale-105 transition-transform flex items-center justify-center gap-2 shadow-xl font-medium"
+                        >
+                            {mode === "song-of-the-day" ? "View Track" : "View Artist"}
+                        </a>
                     </div>
                 </motion.div>
             </div>

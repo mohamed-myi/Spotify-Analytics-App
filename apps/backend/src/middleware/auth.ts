@@ -50,12 +50,15 @@ export async function authMiddleware(
         return;
     }
 
-    // Sliding session expiration; refresh cookie on each request
-    reply.setCookie('session', sessionUserId, COOKIE_OPTIONS);
-    reply.setCookie('auth_status', 'authenticated', {
-        ...COOKIE_OPTIONS,
-        httpOnly: false,
-    });
+    // Sliding session expiration; refresh cookie on each request (skip for demo users)
+    // Demo users have session-only cookies (no maxAge) that clear on browser close
+    if (!user.isDemo) {
+        reply.setCookie('session', sessionUserId, COOKIE_OPTIONS);
+        reply.setCookie('auth_status', 'authenticated', {
+            ...COOKIE_OPTIONS,
+            httpOnly: false,
+        });
+    }
 
     // Attach user ID and demo status to request for downstream handlers
     request.userId = sessionUserId;
