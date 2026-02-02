@@ -13,6 +13,7 @@ import { syncUserQueue } from '../workers/queues';
 import { topStatsQueue } from '../workers/top-stats-queue';
 import { cacheAccessToken } from '../lib/token-manager';
 import { AUTH_RATE_LIMIT } from '../middleware/rate-limit';
+import { generateAccessToken, generateRefreshToken, verifyToken } from '../lib/jwt';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 const DEMO_USER_ID = 'demo_user_fixed_id';
@@ -76,7 +77,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         };
 
         if (error) {
-            fastify.log.warn(`OAuth error: ${error}`);
+            fastify.log.warn(`OAuth error: ${error} `);
             return reply.redirect(`${FRONTEND_URL}?error=access_denied`);
         }
 
@@ -173,20 +174,19 @@ export async function authRoutes(fastify: FastifyInstance) {
                 expiresIn: tokens.expires_in,
             });
 
-            // Generate JWT tokens for API clients (in addition to cookies)
-            const { generateAccessToken, generateRefreshToken } = await import('../lib/jwt.js');
-            const jwtAccessToken = generateAccessToken(user.id, user.role);
-            const jwtRefreshToken = generateRefreshToken(user.id, user.role);
+            // Generate JWT tokens for API clients            // Generate JWT tokens
+            const accessToken = generateAccessToken(user.id, user.role);
+            const refreshToken = generateRefreshToken(user.id, user.role);
 
             fastify.log.info(`User ${user.id} logged in, triggering initial sync`);
 
             // Trigger sync and top stats refresh in parallel
             await Promise.all([
-                syncUserQueue.add(`sync-${user.id}`, { userId: user.id }, { delay: 5000 }),
+                syncUserQueue.add(`sync - ${user.id} `, { userId: user.id }, { delay: 5000 }),
                 topStatsQueue.add(
-                    `login-${user.id}`,
+                    `login - ${user.id} `,
                     { userId: user.id, priority: 'high' },
-                    { priority: 1, jobId: `login-${user.id}` }
+                    { priority: 1, jobId: `login - ${user.id} ` }
                 ),
             ]);
 
@@ -203,8 +203,8 @@ export async function authRoutes(fastify: FastifyInstance) {
                         role: user.role,
                     },
                     tokens: {
-                        accessToken: jwtAccessToken,
-                        refreshToken: jwtRefreshToken,
+                        accessToken: accessToken,
+                        refreshToken: refreshToken,
                         expiresIn: process.env.JWT_EXPIRES_IN || '7d',
                     },
                 });
@@ -267,14 +267,14 @@ export async function authRoutes(fastify: FastifyInstance) {
             }
         }
     }, async (request: FastifyRequest, reply: FastifyReply) => {
-        const { refreshToken } = request.body as { refreshToken: string };
+        const { refreshToken: token } = request.body as { refreshToken: string };
 
-        if (!refreshToken) {
+        if (!token) {
             return reply.status(400).send({ error: 'Refresh token required' });
         }
 
-        const { verifyToken, generateAccessToken, generateRefreshToken } = await import('../lib/jwt.js');
-        const payload = verifyToken(refreshToken);
+        // Verify the refresh token
+        const payload = verifyToken(token);
 
         if (!payload || payload.type !== 'refresh') {
             return reply.status(401).send({ error: 'Invalid refresh token' });

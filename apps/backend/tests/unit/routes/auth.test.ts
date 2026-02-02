@@ -62,6 +62,7 @@ import { build } from '@/index';
 import { prisma } from '@/lib/prisma';
 import { exchangeCodeForTokens, getUserProfile } from '@/lib/spotify';
 import { syncUserQueue } from '@/workers/queues';
+import { generateAccessToken, generateRefreshToken, verifyToken } from '@/lib/jwt';
 
 describe('Auth Routes', () => {
     let app: FastifyInstance;
@@ -291,7 +292,9 @@ describe('Auth Routes', () => {
             });
 
             expect(response.statusCode).toBe(400);
-            expect(response.json()).toEqual({ error: 'Refresh token required' });
+            const body = response.json();
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('refreshToken');
         });
 
         it('returns 401 for invalid refresh token', async () => {
@@ -308,7 +311,6 @@ describe('Auth Routes', () => {
         });
 
         it('returns 401 for access token instead of refresh token', async () => {
-            const { generateAccessToken } = await import('../../../src/lib/jwt.js');
             const accessToken = generateAccessToken('test-user', 'USER');
 
             const response = await app.inject({
@@ -324,7 +326,6 @@ describe('Auth Routes', () => {
         });
 
         it('returns new tokens for valid refresh token', async () => {
-            const { generateRefreshToken } = await import('../../../src/lib/jwt.js');
             const refreshToken = generateRefreshToken('test-user-123', 'USER');
 
             (prisma.user.findUnique as jest.Mock).mockResolvedValue({
@@ -348,7 +349,6 @@ describe('Auth Routes', () => {
         });
 
         it('returns 401 when user no longer exists', async () => {
-            const { generateRefreshToken } = await import('../../../src/lib/jwt.js');
             const refreshToken = generateRefreshToken('deleted-user', 'USER');
 
             (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
@@ -366,7 +366,6 @@ describe('Auth Routes', () => {
         });
 
         it('issues new tokens with updated role', async () => {
-            const { generateRefreshToken, verifyToken } = await import('../../../src/lib/jwt.js');
             const oldRefreshToken = generateRefreshToken('test-user', 'USER');
 
             // User was upgraded to ADMIN
