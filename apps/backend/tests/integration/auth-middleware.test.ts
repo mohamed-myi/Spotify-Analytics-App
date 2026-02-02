@@ -93,4 +93,99 @@ describe('auth middleware', () => {
         expect(response.statusCode).toBe(200);
         expect(response.json()).toEqual({ userId: testUserId });
     });
+
+    test('allows access with valid JWT Bearer token', async () => {
+        const { generateAccessToken } = await import('../../src/lib/jwt.js');
+        const token = generateAccessToken(testUserId, 'USER');
+
+        (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+            id: testUserId,
+            isDemo: false,
+            role: 'USER',
+        });
+
+        const response = await app.inject({
+            method: 'GET',
+            url: '/protected',
+            headers: {
+                authorization: `Bearer ${token}`,
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toEqual({ userId: testUserId });
+    });
+
+    test('returns 401 for invalid JWT token', async () => {
+        const response = await app.inject({
+            method: 'GET',
+            url: '/protected',
+            headers: {
+                authorization: 'Bearer invalid-token-here',
+            },
+        });
+
+        expect(response.statusCode).toBe(401);
+        expect(response.json()).toEqual({ error: 'Invalid or expired token' });
+    });
+
+    test('returns 401 for expired JWT token', async () => {
+        const jwt = require('jsonwebtoken');
+        const JWT_SECRET = process.env.SESSION_SECRET || 'test-secret';
+        const expiredToken = jwt.sign(
+            { userId: testUserId, role: 'USER', type: 'access' },
+            JWT_SECRET,
+            { expiresIn: '0s' }
+        );
+
+        const response = await app.inject({
+            method: 'GET',
+            url: '/protected',
+            headers: {
+                authorization: `Bearer ${expiredToken}`,
+            },
+        });
+
+        expect(response.statusCode).toBe(401);
+    });
+
+    test('JWT token takes priority over session cookie when both present', async () => {
+        const { generateAccessToken } = await import('../../src/lib/jwt.js');
+        const jwtUserId = 'jwt-user-123';
+        const token = generateAccessToken(jwtUserId, 'ADMIN');
+
+        const response = await app.inject({
+            method: 'GET',
+            url: '/protected',
+            headers: {
+                authorization: `Bearer ${token}`,
+            },
+            cookies: {
+                session: 'different-user-456', // Should be ignored
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toEqual({ userId: jwtUserId });
+    });
+
+    test('attaches userRole from JWT payload', async () => {
+        const { generateAccessToken } = await import('../../src/lib/jwt.js');
+        const token = generateAccessToken(testUserId, 'ADMIN');
+
+        app.get('/role-test', async (request) => {
+            return { role: request.userRole };
+        });
+
+        const response = await app.inject({
+            method: 'GET',
+            url: '/role-test',
+            headers: {
+                authorization: `Bearer ${token}`,
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toEqual({ role: 'ADMIN' });
+    });
 });

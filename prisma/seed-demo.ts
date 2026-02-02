@@ -45,11 +45,13 @@ async function main() {
             imageUrl: null, // Will use default avatar
             country: 'US',
             isDemo: true,
+            role: 'DEMO',
             totalPlayCount: 0,
             totalListeningMs: BigInt(0),
         },
         update: {
             isDemo: true,
+            role: 'DEMO',
             displayName: 'Demo User',
         }
     });

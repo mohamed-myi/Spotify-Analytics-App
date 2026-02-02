@@ -153,6 +153,7 @@ export async function authRoutes(fastify: FastifyInstance) {
                 update: {},
             });
 
+            // Set session cookies for traditional web app auth
             reply.setCookie('session', user.id, {
                 ...COOKIE_OPTIONS,
                 maxAge: 60 * 60 * 24 * 30,
@@ -172,6 +173,11 @@ export async function authRoutes(fastify: FastifyInstance) {
                 expiresIn: tokens.expires_in,
             });
 
+            // Generate JWT tokens for API clients (in addition to cookies)
+            const { generateAccessToken, generateRefreshToken } = await import('../lib/jwt.js');
+            const jwtAccessToken = generateAccessToken(user.id, user.role);
+            const jwtRefreshToken = generateRefreshToken(user.id, user.role);
+
             fastify.log.info(`User ${user.id} logged in, triggering initial sync`);
 
             // Trigger sync and top stats refresh in parallel
@@ -184,6 +190,27 @@ export async function authRoutes(fastify: FastifyInstance) {
                 ),
             ]);
 
+            // Check if this is a programmatic auth (Accept: application/json header)
+            // If so, return JSON with tokens instead of redirecting
+            const acceptHeader = request.headers.accept;
+            if (acceptHeader?.includes('application/json')) {
+                return reply.send({
+                    user: {
+                        id: user.id,
+                        displayName: user.displayName,
+                        email: user.email,
+                        imageUrl: user.imageUrl,
+                        role: user.role,
+                    },
+                    tokens: {
+                        accessToken: jwtAccessToken,
+                        refreshToken: jwtRefreshToken,
+                        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+                    },
+                });
+            }
+
+            // Default: redirect to dashboard (traditional web app flow)
             return reply.redirect(`${FRONTEND_URL}/dashboard`);
         } catch (err) {
             fastify.log.error(err, 'OAuth callback error');
@@ -208,6 +235,70 @@ export async function authRoutes(fastify: FastifyInstance) {
         reply.clearCookie('session', { ...COOKIE_OPTIONS, maxAge: 0 });
         reply.clearCookie('auth_status', { ...COOKIE_OPTIONS, httpOnly: false, maxAge: 0 });
         return { success: true };
+    });
+
+    // JWT token refresh endpoint
+    fastify.post('/auth/refresh', {
+        schema: {
+            description: 'Refresh JWT access token using refresh token',
+            tags: ['Auth'],
+            body: {
+                type: 'object',
+                required: ['refreshToken'],
+                properties: {
+                    refreshToken: { type: 'string' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        accessToken: { type: 'string' },
+                        refreshToken: { type: 'string' },
+                        expiresIn: { type: 'string' }
+                    }
+                },
+                401: {
+                    type: 'object',
+                    properties: {
+                        error: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
+        const { refreshToken } = request.body as { refreshToken: string };
+
+        if (!refreshToken) {
+            return reply.status(400).send({ error: 'Refresh token required' });
+        }
+
+        const { verifyToken, generateAccessToken, generateRefreshToken } = await import('../lib/jwt.js');
+        const payload = verifyToken(refreshToken);
+
+        if (!payload || payload.type !== 'refresh') {
+            return reply.status(401).send({ error: 'Invalid refresh token' });
+        }
+
+        // Verify user still exists and get current role
+        const user = await prisma.user.findUnique({
+            where: { id: payload.userId },
+            select: { id: true, role: true },
+        });
+
+        if (!user) {
+            return reply.status(401).send({ error: 'User not found' });
+        }
+
+        // Generate new tokens with current role (in case it changed)
+        const newAccessToken = generateAccessToken(user.id, user.role);
+        const newRefreshToken = generateRefreshToken(user.id, user.role);
+
+        return reply.send({
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken,
+            expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+        });
     });
 
     // Demo mode session - no OAuth required

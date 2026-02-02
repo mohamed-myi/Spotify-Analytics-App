@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { Role } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
 // Routes that don't require session-based authentication
@@ -16,6 +17,7 @@ const COOKIE_OPTIONS = {
 declare module 'fastify' {
     interface FastifyRequest {
         userId?: string;
+        userRole?: Role;
         isDemo?: boolean;
     }
 }
@@ -30,6 +32,28 @@ export async function authMiddleware(
         return;
     }
 
+    // STRATEGY 1: Check for JWT in Authorization header
+    const authHeader = request.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        const { verifyToken } = await import('../lib/jwt.js');
+        const payload = verifyToken(token);
+
+        if (payload && payload.type === 'access') {
+            // JWT auth successful - attach user info to request
+            request.userId = payload.userId;
+            request.userRole = payload.role;
+            // Note: isDemo is inferred from role for JWT users
+            request.isDemo = payload.role === 'DEMO';
+            return;
+        }
+
+        // JWT invalid - reject immediately (don't fall back to cookies for explicit Bearer auth)
+        reply.status(401).send({ error: 'Invalid or expired token' });
+        return;
+    }
+
+    // STRATEGY 2: Check for session cookie (existing behavior)
     const sessionUserId = (request.cookies as Record<string, string>).session;
 
     if (!sessionUserId) {
@@ -40,7 +64,7 @@ export async function authMiddleware(
     // Validate user exists
     const user = await prisma.user.findUnique({
         where: { id: sessionUserId },
-        select: { id: true, isDemo: true },
+        select: { id: true, isDemo: true, role: true },
     });
 
     if (!user) {
@@ -60,7 +84,8 @@ export async function authMiddleware(
         });
     }
 
-    // Attach user ID and demo status to request for downstream handlers
+    // Attach user ID, role, and demo status to request for downstream handlers
     request.userId = sessionUserId;
+    request.userRole = user.role;
     request.isDemo = user.isDemo;
 }

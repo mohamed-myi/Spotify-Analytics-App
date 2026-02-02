@@ -281,4 +281,114 @@ describe('Auth Routes', () => {
             expect(response.json()).toEqual({ error: 'User not found' });
         });
     });
+
+    describe('POST /auth/refresh', () => {
+        it('returns 400 when no refresh token provided', async () => {
+            const response = await app.inject({
+                method: 'POST',
+                url: '/auth/refresh',
+                payload: {},
+            });
+
+            expect(response.statusCode).toBe(400);
+            expect(response.json()).toEqual({ error: 'Refresh token required' });
+        });
+
+        it('returns 401 for invalid refresh token', async () => {
+            const response = await app.inject({
+                method: 'POST',
+                url: '/auth/refresh',
+                payload: {
+                    refreshToken: 'invalid-token',
+                },
+            });
+
+            expect(response.statusCode).toBe(401);
+            expect(response.json()).toEqual({ error: 'Invalid refresh token' });
+        });
+
+        it('returns 401 for access token instead of refresh token', async () => {
+            const { generateAccessToken } = await import('../../../src/lib/jwt.js');
+            const accessToken = generateAccessToken('test-user', 'USER');
+
+            const response = await app.inject({
+                method: 'POST',
+                url: '/auth/refresh',
+                payload: {
+                    refreshToken: accessToken, // Wrong token type
+                },
+            });
+
+            expect(response.statusCode).toBe(401);
+            expect(response.json()).toEqual({ error: 'Invalid refresh token' });
+        });
+
+        it('returns new tokens for valid refresh token', async () => {
+            const { generateRefreshToken } = await import('../../../src/lib/jwt.js');
+            const refreshToken = generateRefreshToken('test-user-123', 'USER');
+
+            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+                id: 'test-user-123',
+                role: 'USER',
+            });
+
+            const response = await app.inject({
+                method: 'POST',
+                url: '/auth/refresh',
+                payload: {
+                    refreshToken,
+                },
+            });
+
+            expect(response.statusCode).toBe(200);
+            const body = response.json();
+            expect(body.accessToken).toBeDefined();
+            expect(body.refreshToken).toBeDefined();
+            expect(body.expiresIn).toBe('7d');
+        });
+
+        it('returns 401 when user no longer exists', async () => {
+            const { generateRefreshToken } = await import('../../../src/lib/jwt.js');
+            const refreshToken = generateRefreshToken('deleted-user', 'USER');
+
+            (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+            const response = await app.inject({
+                method: 'POST',
+                url: '/auth/refresh',
+                payload: {
+                    refreshToken,
+                },
+            });
+
+            expect(response.statusCode).toBe(401);
+            expect(response.json()).toEqual({ error: 'User not found' });
+        });
+
+        it('issues new tokens with updated role', async () => {
+            const { generateRefreshToken, verifyToken } = await import('../../../src/lib/jwt.js');
+            const oldRefreshToken = generateRefreshToken('test-user', 'USER');
+
+            // User was upgraded to ADMIN
+            (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+                id: 'test-user',
+                role: 'ADMIN',
+            });
+
+            const response = await app.inject({
+                method: 'POST',
+                url: '/auth/refresh',
+                payload: {
+                    refreshToken: oldRefreshToken,
+                },
+            });
+
+            expect(response.statusCode).toBe(200);
+            const body = response.json();
+
+            // Verify new access token has updated role
+            const newAccessPayload = verifyToken(body.accessToken);
+            expect(newAccessPayload?.role).toBe('ADMIN');
+        });
+    });
 });

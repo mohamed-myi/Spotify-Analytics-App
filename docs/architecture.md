@@ -38,7 +38,7 @@ The system is a **single deployable backend unit** organized into discrete horiz
                                │
 ┌──────────────────────────────▼──────────────────────────────────┐
 │                      PERSISTENCE LAYER                           │
-│   PostgreSQL 17 (Neon) - Partitioned tables, TIMESTAMPTZ         │
+│   PostgreSQL 15 (AWS RDS) - Partitioned tables, TIMESTAMPTZ      │
 │   AWS ElastiCache (Redis) - Cache, locks, rate limits            │
 └─────────────────────────────────────────────────────────────────┘
 
@@ -78,7 +78,7 @@ The system is a **single deployable backend unit** organized into discrete horiz
 | Service | Purpose | Failure Mode | Mitigation |
 |---------|---------|--------------|------------|
 | **Spotify Web API** | OAuth, recently-played, top tracks/artists | 401/403/429 errors, outages | Circuit breaker, retry with backoff, token invalidation after 3 failures |
-| **Neon PostgreSQL** | Primary datastore | Cold start latency, connection limits | Connection pooling via Prisma adapter |
+| **AWS RDS PostgreSQL** | Primary datastore | Connection limits, cost at scale | Connection pooling via Prisma, SSL enforcement |
 | **AWS ElastiCache** | Cache, locks, job queue | Private VPC access only | Security Groups allow EC2 access |
 | **AWS Lambda** | Cron triggers (EventBridge) | Implementation complexity | Decoupled from main app logic |
 
@@ -96,7 +96,7 @@ The system is a **single deployable backend unit** organized into discrete horiz
 └─────────────────────────────────────────────────────────────────┘
          │                    │                    │
          ▼                    ▼                    ▼
-   [Spotify API]        [Neon Postgres]      [AWS ElastiCache]
+   [Spotify API]        [AWS RDS Postgres]   [AWS ElastiCache]
    (OAuth tokens)       (Encrypted conn)     (Private VPC)
 ```
 
@@ -112,7 +112,7 @@ The system is a **single deployable backend unit** organized into discrete horiz
 | **Prisma** over Drizzle/Knex | Drizzle, raw SQL | Type-safe queries from schema, quick setup, migration management |
 | **BullMQ** over Temporal/Celery | Temporal, node-cron | Redis-native, lightweight, sufficient for job complexity |
 | **PostgreSQL partitioning** | Sharding, separate tables | Native range partitioning handles up to 1B rows without application changes |
-| **Neon** over AWS RDS | Self-managed Postgres | Serverless, branching for dev environments |
+| **AWS RDS** over self-managed | Self-managed Postgres | Managed service, automated backups, SSL enforcement |
 | **HTTP-only cookies** over localStorage JWT | localStorage + Bearer | XSS-resistant, automatic inclusion, server-side revocation |
 | **Monorepo (pnpm)** over multi-repo | Separate repositories | Solo development, easy changes across frontend/backend, organization |
 
@@ -179,7 +179,7 @@ The layered monolith with async workers is optimal for:
 
 1. **Single developer project**: One deployment artifact, one schema, one test suite.
 2. **Moderate scale**: Partitioned tables handle up to 1B rows without sharding complexity.
-3. **Cost efficiency**: Single t3.small EC2 instance (Free Tier eligible) + Neon Free Tier.
+3. **Cost efficiency**: Single t3.medium EC2 instance + RDS db.t3.micro (Free Tier eligible).
 4. **Acceptable risk**: Worker contention is mitigatable via concurrency limits and import throttling.
 
 The architecture should be revisited if:
@@ -196,9 +196,12 @@ The architecture should be revisited if:
 | Constraint | Enforcement |
 |------------|-------------|
 | All refresh tokens encrypted at rest | AES-256-GCM with random IV per encryption |
+| Dual-mode authentication (cookies + JWT) | Auth middleware checks Bearer tokens first, falls back to session cookies |
+| JWT tokens signed with HS256 | Access tokens (7-day expiry), refresh tokens (30-day expiry) |
 | Session cookies HTTP-only and Secure | Fastify cookie configuration |
 | Token invalidation after 3 consecutive failures | `SpotifyAuth.consecutiveFailures` counter |
 | PKCE required for OAuth | Authorization code flow with code verifier |
+| Role-based access control (RBAC) | 3 roles (ADMIN, USER, DEMO) with 7 granular permissions |
 
 ### Scalability
 
