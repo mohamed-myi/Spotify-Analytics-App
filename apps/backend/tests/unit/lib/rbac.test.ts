@@ -1,4 +1,4 @@
-import { Permission, hasPermission, ROLE_PERMISSIONS } from '../../src/lib/rbac.js';
+import { Permission, hasPermission, ROLE_PERMISSIONS } from '@/lib/rbac';
 import { Role } from '@prisma/client';
 
 describe('RBAC System', () => {

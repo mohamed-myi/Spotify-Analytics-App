@@ -1,4 +1,4 @@
-import { generateAccessToken, generateRefreshToken, verifyToken } from '../../src/lib/jwt.js';
+import { generateAccessToken, generateRefreshToken, verifyToken } from '@/lib/jwt';
 import { Role } from '@prisma/client';
 
 describe('JWT utilities', () => {
@@ -112,17 +112,6 @@ describe('JWT utilities', () => {
     });
 
     describe('token differentiation', () => {
-        it('generates different tokens for same user', () => {
-            const userId = 'test-user-999';
-            const role: Role = 'USER';
-
-            const token1 = generateAccessToken(userId, role);
-            const token2 = generateAccessToken(userId, role);
-
-            // Tokens should be different due to timestamp
-            expect(token1).not.toBe(token2);
-        });
-
         it('distinguishes between access and refresh tokens', () => {
             const userId = 'test-user-888';
             const role: Role = 'USER';

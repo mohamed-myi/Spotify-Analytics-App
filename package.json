@@ -15,6 +15,7 @@
         "seed:demo": "npx tsx prisma/seed-demo.ts"
     },
     "devDependencies": {
+        "@types/jsonwebtoken": "^9.0.10",
         "@types/pg": "^8.16.0",
         "concurrently": "^9.0.0",
         "dotenv": "^17.2.3",
