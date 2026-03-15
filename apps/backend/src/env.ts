@@ -15,6 +15,9 @@ const envSchema = z.object({
     SPOTIFY_CLIENT_ID: z.string().min(1),
     SPOTIFY_CLIENT_SECRET: z.string().min(1),
     ENCRYPTION_KEY: z.string().length(64, 'ENCRYPTION_KEY must be 64 hex characters (32 bytes)'),
+    SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+    CRON_SECRET: z.string().min(16, 'CRON_SECRET must be at least 16 characters'),
 
     // Circuit Breaker Configurations
     SPOTIFY_CB_THRESHOLD: z.string().default('5').transform(Number),

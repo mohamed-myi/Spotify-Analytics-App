@@ -7,7 +7,7 @@ export interface JWTPayload {
     type: 'access' | 'refresh';
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'fallback-dev-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET!;
 const ACCESS_TOKEN_EXPIRY = process.env.JWT_EXPIRES_IN || '7d';
 const REFRESH_TOKEN_EXPIRY = process.env.JWT_REFRESH_EXPIRES_IN || '30d';
 

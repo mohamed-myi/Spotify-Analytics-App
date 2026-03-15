@@ -54,7 +54,7 @@ export const build = async () => {
     exposedHeaders: ['Set-Cookie'],
   });
 
-  await server.register(cookie);
+  await server.register(cookie, { secret: process.env.SESSION_SECRET! });
   await server.register(multipart, {
     limits: {
       fileSize: 100 * 1024 * 1024,

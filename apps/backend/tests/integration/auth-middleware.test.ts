@@ -5,10 +5,13 @@ import { resolve } from 'path';
 config({ path: resolve(__dirname, '../../../../.env') });
 
 import Fastify, { FastifyInstance } from 'fastify';
-import cookie from '@fastify/cookie';
+import cookie, { Signer } from '@fastify/cookie';
 import { authMiddleware } from '../../src/middleware/auth';
 import { prisma } from '../../src/lib/prisma';
 import { createMockPrisma } from '../mocks/prisma.mock';
+
+const TEST_SECRET = 'test_session_secret_at_least_32_chars_long';
+const signer = new Signer(TEST_SECRET);
 
 jest.mock('../../src/lib/prisma', () => {
     const { createMockPrisma } = jest.requireActual('../mocks/prisma.mock');
@@ -25,7 +28,7 @@ describe('auth middleware', () => {
         testUserId = 'test-mock-user-id';
 
         app = Fastify();
-        await app.register(cookie);
+        await app.register(cookie, { secret: TEST_SECRET });
         app.addHook('preHandler', authMiddleware);
 
         // Public route (added before ready)
@@ -69,7 +72,19 @@ describe('auth middleware', () => {
             method: 'GET',
             url: '/protected',
             cookies: {
-                session: 'invalid-user-id',
+                session: signer.sign('invalid-user-id'),
+            },
+        });
+
+        expect(response.statusCode).toBe(401);
+    });
+
+    test('returns 401 for unsigned/tampered session cookie', async () => {
+        const response = await app.inject({
+            method: 'GET',
+            url: '/protected',
+            cookies: {
+                session: 'raw-unsigned-value',
             },
         });
 
@@ -87,7 +102,7 @@ describe('auth middleware', () => {
             method: 'GET',
             url: '/protected',
             cookies: {
-                session: testUserId,
+                session: signer.sign(testUserId),
             },
         });
 

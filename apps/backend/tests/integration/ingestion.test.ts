@@ -1,134 +1,116 @@
 import { prisma } from '../../src/lib/prisma';
-import { insertListeningEvent } from '../../src/services/ingestion';
+import { insertListeningEvents } from '../../src/services/ingestion';
 import { Source } from '@prisma/client';
 import type { ParsedListeningEvent } from '../../src/types/ingestion';
-import { createMockPrisma } from '../mocks/prisma.mock';
 
-// Explicitly mock Prisma
-jest.mock('../../src/lib/prisma', () => {
-    const { createMockPrisma } = jest.requireActual('../mocks/prisma.mock');
-    return {
-        prisma: createMockPrisma(),
-    };
-});
-
-// Mock partition setup to avoid raw SQL errors
-jest.mock('../setup', () => ({
-    ensurePartitionForDate: jest.fn().mockResolvedValue(undefined),
+jest.mock('../../src/lib/redis', () => ({
+    redis: {},
+    closeRedis: jest.fn(),
+    queueArtistForMetadata: jest.fn(),
+    queueTrackForFeatures: jest.fn(),
 }));
-
-let testTrackData: ParsedListeningEvent['track'];
 
 const TEST_DATE_1 = new Date('2025-01-01T12:00:00Z');
 
-// Helpers
 const createTestEvent = (overrides: Partial<ParsedListeningEvent> = {}): ParsedListeningEvent => ({
     spotifyTrackId: 'test-track-id',
     playedAt: TEST_DATE_1,
     msPlayed: 180000,
     isEstimated: true,
     source: Source.API,
-    track: testTrackData,
+    track: {
+        spotifyId: 'test-track-id',
+        name: 'Test Track',
+        durationMs: 180000,
+        previewUrl: null,
+        album: {
+            spotifyId: 'album-id',
+            name: 'Test Album',
+            imageUrl: null,
+            releaseDate: null,
+        },
+        artists: [
+            {
+                spotifyId: 'artist-id',
+                name: 'Test Artist',
+            },
+        ],
+    },
     ...overrides,
 });
 
-describe('Ingestion Service', () => {
-    beforeAll(() => {
-        testTrackData = {
-            spotifyId: `test-track-id`,
-            name: 'Test Track',
-            durationMs: 180000,
-            previewUrl: null,
-            album: {
-                spotifyId: 'album-id',
-                name: 'Test Album',
-                imageUrl: null,
-                releaseDate: null,
-            },
-            artists: [
-                {
-                    spotifyId: 'artist-id',
-                    name: 'Test Artist',
-                },
-            ],
-        };
+/** Set up catalog mocks so bulkUpsertCatalog resolves track IDs correctly */
+function setupCatalogMocks() {
+    (prisma.album.createMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (prisma.album.findMany as jest.Mock).mockResolvedValue([{ id: 'db-album-id', spotifyId: 'album-id' }]);
+    (prisma.artist.createMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (prisma.artist.findMany as jest.Mock).mockResolvedValue([{ id: 'db-artist-id', spotifyId: 'artist-id', imageUrl: null }]);
+    (prisma.track.createMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (prisma.track.findMany as jest.Mock).mockResolvedValue([{ id: 'db-track-id', spotifyId: 'test-track-id' }]);
+    (prisma.trackArtist.createMany as jest.Mock).mockResolvedValue({ count: 0 });
+
+    // The batch API uses interactive transactions: $transaction(async (tx) => { ... })
+    (prisma.$transaction as jest.Mock).mockImplementation(async (arg: any) => {
+        if (typeof arg === 'function') return arg(prisma);
+        return Promise.all(arg);
     });
+}
 
+describe('Ingestion Service', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
-
-        // Default mocks for dependency upserts (Album, Artist, Track)
-        // Assume they exist or are created successfully
-        (prisma.album.findUnique as jest.Mock).mockResolvedValue({ id: 'db-album-id' });
-        (prisma.artist.findUnique as jest.Mock).mockResolvedValue({ id: 'db-artist-id' });
-
-        // Track upsert mocks
-        (prisma.track.findUnique as jest.Mock).mockResolvedValue({ id: 'db-track-id' });
-        (prisma.track.update as jest.Mock).mockResolvedValue({ id: 'db-track-id' });
-
-        // Transaction mock for inserting event + updating user stats
-        (prisma.$transaction as jest.Mock).mockImplementation((args) => Promise.all(args));
+        setupCatalogMocks();
     });
 
     test('inserts new record when not existing', async () => {
-        // Mock: Record does NOT exist
-        (prisma.listeningEvent.findUnique as jest.Mock).mockResolvedValue(null);
-        (prisma.listeningEvent.create as jest.Mock).mockResolvedValue({ id: 'new-event-id' });
+        // No existing events
+        (prisma.listeningEvent.findMany as jest.Mock).mockResolvedValue([]);
+        (prisma.listeningEvent.createMany as jest.Mock).mockResolvedValue({ count: 1 });
 
         const event = createTestEvent();
-        const result = await insertListeningEvent('user-id', event);
+        const summary = await insertListeningEvents('user-id', [event]);
 
-        expect(result).toBe('added');
-        expect(prisma.listeningEvent.create).toHaveBeenCalled();
+        expect(summary.added).toBe(1);
+        expect(summary.skipped).toBe(0);
+        expect(prisma.listeningEvent.createMany).toHaveBeenCalled();
     });
 
     test('skips duplicate API record if exists', async () => {
-        // Mock: Record exists
-        (prisma.listeningEvent.findUnique as jest.Mock).mockResolvedValue({
-            isEstimated: true,
-            source: Source.API,
-        });
+        (prisma.listeningEvent.findMany as jest.Mock).mockResolvedValue([
+            { trackId: 'db-track-id', playedAt: TEST_DATE_1, isEstimated: true, source: Source.API },
+        ]);
 
-        const event = createTestEvent();
-        const result = await insertListeningEvent('user-id', event);
+        const event = createTestEvent({ source: Source.API });
+        const summary = await insertListeningEvents('user-id', [event]);
 
-        expect(result).toBe('skipped');
-        expect(prisma.listeningEvent.create).not.toHaveBeenCalled();
+        expect(summary.skipped).toBe(1);
+        expect(summary.added).toBe(0);
     });
 
     test('import claims estimated record (update)', async () => {
-        // Mock: Record exists and is estimated
-        (prisma.listeningEvent.findUnique as jest.Mock).mockResolvedValue({
-            isEstimated: true,
-            source: Source.API, // was originally API
-        });
+        (prisma.listeningEvent.findMany as jest.Mock).mockResolvedValue([
+            { trackId: 'db-track-id', playedAt: TEST_DATE_1, isEstimated: true, source: Source.API },
+        ]);
 
         const importEvent = createTestEvent({
             isEstimated: false,
             source: Source.IMPORT,
             msPlayed: 45000,
         });
+        const summary = await insertListeningEvents('user-id', [importEvent]);
 
-        const result = await insertListeningEvent('user-id', importEvent);
-
-        expect(result).toBe('updated');
+        expect(summary.updated).toBe(1);
         expect(prisma.listeningEvent.update).toHaveBeenCalled();
     });
 
     test('import does not overwrite ground truth (existing import)', async () => {
-        // Mock: Record exists and is NOT estimated
-        (prisma.listeningEvent.findUnique as jest.Mock).mockResolvedValue({
-            isEstimated: false,
-            source: Source.IMPORT,
-        });
+        (prisma.listeningEvent.findMany as jest.Mock).mockResolvedValue([
+            { trackId: 'db-track-id', playedAt: TEST_DATE_1, isEstimated: false, source: Source.IMPORT },
+        ]);
 
-        const secondImport = createTestEvent({
-            source: Source.IMPORT,
-        });
+        const secondImport = createTestEvent({ source: Source.IMPORT });
+        const summary = await insertListeningEvents('user-id', [secondImport]);
 
-        const result = await insertListeningEvent('user-id', secondImport);
-
-        expect(result).toBe('skipped');
+        expect(summary.skipped).toBe(1);
         expect(prisma.listeningEvent.update).not.toHaveBeenCalled();
     });
 });

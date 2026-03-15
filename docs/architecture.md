@@ -179,7 +179,7 @@ The layered monolith with async workers is optimal for:
 
 1. **Single developer project**: One deployment artifact, one schema, one test suite.
 2. **Moderate scale**: Partitioned tables handle up to 1B rows without sharding complexity.
-3. **Cost efficiency**: Single t3.medium EC2 instance + RDS db.t3.micro (Free Tier eligible).
+3. **Cost efficiency**: Single t3.medium EC2 instance + RDS db.t3.micro.
 4. **Acceptable risk**: Worker contention is mitigatable via concurrency limits and import throttling.
 
 The architecture should be revisited if:

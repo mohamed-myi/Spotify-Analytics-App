@@ -24,7 +24,9 @@ export async function userRoutes(fastify: FastifyInstance) {
             return reply.status(404).send({ error: 'User not found' });
         }
 
-        // Check privacy
+        if (!user.settings?.isPublicProfile) {
+            return reply.status(403).send({ error: 'This profile is private' });
+        }
 
         return toJSON(user);
     });

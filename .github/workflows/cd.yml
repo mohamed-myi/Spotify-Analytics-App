@@ -19,9 +19,23 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: JWT_SECRET,SESSION_SECRET,CRON_SECRET
           script: |
             cd ~/myi-v3
+
+            # Ensure required secrets are in .env (idempotent)
+            for VAR in JWT_SECRET SESSION_SECRET CRON_SECRET; do
+              VALUE=$(eval echo \$$VAR)
+              if [ -n "$VALUE" ]; then
+                grep -q "^${VAR}=" .env 2>/dev/null && sed -i "s|^${VAR}=.*|${VAR}=${VALUE}|" .env || echo "${VAR}=${VALUE}" >> .env
+              fi
+            done
+
             git reset --hard HEAD
             git pull origin main
             chmod +x deploy.sh
             ./deploy.sh
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

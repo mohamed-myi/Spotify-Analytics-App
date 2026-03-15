@@ -45,7 +45,7 @@ export async function cronRoutes(fastify: FastifyInstance): Promise<void> {
     }, async (request, reply) => {
 
         const cronSecret = request.headers['x-cron-secret'];
-        if (cronSecret !== process.env.CRON_SECRET) {
+        if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
             log.warn({ event: 'cron_unauthorized' }, 'Unauthorized cron request');
             return reply.status(401).send({ error: 'Unauthorized' });
         }
@@ -130,7 +130,7 @@ export async function cronRoutes(fastify: FastifyInstance): Promise<void> {
     // POST /cron/seed-top-stats, daily warm-cache sweep
     fastify.post('/cron/seed-top-stats', async (request, reply) => {
         const cronSecret = request.headers['x-cron-secret'];
-        if (cronSecret !== process.env.CRON_SECRET) {
+        if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
             return reply.status(401).send({ error: 'Unauthorized' });
         }
 
@@ -194,7 +194,7 @@ export async function cronRoutes(fastify: FastifyInstance): Promise<void> {
     // GET /cron/queue-status
     fastify.get('/cron/queue-status', async (request, reply) => {
         const cronSecret = request.headers['x-cron-secret'];
-        if (cronSecret !== process.env.CRON_SECRET) {
+        if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
             return reply.status(401).send({ error: 'Unauthorized' });
         }
 
@@ -231,7 +231,7 @@ export async function cronRoutes(fastify: FastifyInstance): Promise<void> {
     // POST /cron/manage-partitions
     fastify.post('/cron/manage-partitions', async (request, reply) => {
         const cronSecret = request.headers['x-cron-secret'];
-        if (cronSecret !== process.env.CRON_SECRET) {
+        if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
             return reply.status(401).send({ error: 'Unauthorized' });
         }
 
@@ -296,7 +296,7 @@ export async function cronRoutes(fastify: FastifyInstance): Promise<void> {
         }
     }, async (request, reply) => {
         const cronSecret = request.headers['x-cron-secret'];
-        if (cronSecret !== process.env.CRON_SECRET) {
+        if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
             log.warn({ event: 'cron_unauthorized' }, 'Unauthorized cleanup-stale-imports request');
             return reply.status(401).send({ error: 'Unauthorized' });
         }

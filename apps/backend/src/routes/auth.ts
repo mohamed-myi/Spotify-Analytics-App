@@ -157,6 +157,7 @@ export async function authRoutes(fastify: FastifyInstance) {
             // Set session cookies for traditional web app auth
             reply.setCookie('session', user.id, {
                 ...COOKIE_OPTIONS,
+                signed: true,
                 maxAge: 60 * 60 * 24 * 30,
             });
 
@@ -334,6 +335,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         // Set session cookies (session-only for demo, no maxAge)
         reply.setCookie('session', DEMO_USER_ID, {
             ...COOKIE_OPTIONS,
+            signed: true,
             // No maxAge means session cookie (clears on browser close)
         });
         reply.setCookie('auth_status', 'authenticated', {
@@ -372,12 +374,18 @@ export async function authRoutes(fastify: FastifyInstance) {
             }
         }
     }, async (request: FastifyRequest, reply: FastifyReply) => {
-        const cookies = request.cookies as Record<string, string>;
-        const sessionUserId = cookies.session;
+        const rawCookie = (request.cookies as Record<string, string>).session;
 
-        if (!sessionUserId) {
+        if (!rawCookie) {
             return reply.status(401).send({ error: 'Not authenticated' });
         }
+
+        const unsigned = request.unsignCookie(rawCookie);
+        if (!unsigned.valid || !unsigned.value) {
+            return reply.status(401).send({ error: 'Not authenticated' });
+        }
+
+        const sessionUserId = unsigned.value;
 
         const user = await prisma.user.findUnique({
             where: { id: sessionUserId },

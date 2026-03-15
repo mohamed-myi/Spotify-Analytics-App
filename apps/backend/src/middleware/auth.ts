@@ -32,7 +32,7 @@ export async function authMiddleware(
         return;
     }
 
-    // STRATEGY 1: Check for JWT in Authorization header
+    // Check for JWT in Authorization header
     const authHeader = request.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.substring(7);
@@ -53,13 +53,21 @@ export async function authMiddleware(
         return;
     }
 
-    // STRATEGY 2: Check for session cookie (existing behavior)
-    const sessionUserId = (request.cookies as Record<string, string>).session;
+    // Check for session cookie (existing behavior)
+    const rawCookie = (request.cookies as Record<string, string>).session;
 
-    if (!sessionUserId) {
+    if (!rawCookie) {
         reply.status(401).send({ error: 'Not authenticated' });
         return;
     }
+
+    const unsigned = request.unsignCookie(rawCookie);
+    if (!unsigned.valid || !unsigned.value) {
+        reply.status(401).send({ error: 'Not authenticated' });
+        return;
+    }
+
+    const sessionUserId = unsigned.value;
 
     // Validate user exists
     const user = await prisma.user.findUnique({
@@ -77,7 +85,7 @@ export async function authMiddleware(
     // Sliding session expiration; refresh cookie on each request (skip for demo users)
     // Demo users have session-only cookies (no maxAge) that clear on browser close
     if (!user.isDemo) {
-        reply.setCookie('session', sessionUserId, COOKIE_OPTIONS);
+        reply.setCookie('session', sessionUserId, { ...COOKIE_OPTIONS, signed: true });
         reply.setCookie('auth_status', 'authenticated', {
             ...COOKIE_OPTIONS,
             httpOnly: false,

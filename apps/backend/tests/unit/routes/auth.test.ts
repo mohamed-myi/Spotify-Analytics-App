@@ -58,11 +58,14 @@ jest.mock('@/workers/queues', () => ({
 }));
 
 import { FastifyInstance } from 'fastify';
+import { Signer } from '@fastify/cookie';
 import { build } from '@/index';
 import { prisma } from '@/lib/prisma';
 import { exchangeCodeForTokens, getUserProfile } from '@/lib/spotify';
 import { syncUserQueue } from '@/workers/queues';
 import { generateAccessToken, generateRefreshToken, verifyToken } from '@/lib/jwt';
+
+const signer = new Signer(process.env.SESSION_SECRET!);
 
 describe('Auth Routes', () => {
     let app: FastifyInstance;
@@ -257,7 +260,7 @@ describe('Auth Routes', () => {
                 method: 'GET',
                 url: '/auth/me',
                 cookies: {
-                    session: 'user-123',
+                    session: signer.sign('user-123'),
                 },
             });
 
@@ -274,7 +277,7 @@ describe('Auth Routes', () => {
                 method: 'GET',
                 url: '/auth/me',
                 cookies: {
-                    session: 'deleted-user',
+                    session: signer.sign('deleted-user'),
                 },
             });
 

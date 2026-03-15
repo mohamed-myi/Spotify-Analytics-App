@@ -58,6 +58,24 @@ describe('Users Routes', () => {
             expect(response.json().error).toBe('User not found');
         });
 
+        it('returns 403 for private profile', async () => {
+            prisma.user.findUnique.mockResolvedValue({
+                spotifyId: 'private_user',
+                displayName: 'Private User',
+                imageUrl: null,
+                settings: { isPublicProfile: false },
+                createdAt: new Date('2024-01-01'),
+            });
+
+            const response = await app.inject({
+                method: 'GET',
+                url: '/users/private_user',
+            });
+
+            expect(response.statusCode).toBe(403);
+            expect(response.json().error).toBe('This profile is private');
+        });
+
         it('returns public user profile', async () => {
             prisma.user.findUnique.mockResolvedValue({
                 spotifyId: 'spotify123',
