@@ -1,4 +1,4 @@
-import './env';
+import { EnvValidationError, getEnv } from './env';
 import { resolve } from 'path';
 
 import Fastify from 'fastify';
@@ -23,14 +23,15 @@ import { closeSyncWorker, setupSyncWorker } from './workers/sync-worker';
 import { generateRequestId, logger } from './lib/logger';
 import { globalErrorHandler } from './lib/error-handler';
 
-const CORS_ORIGINS = process.env.NODE_ENV === 'production'
-  ? [process.env.FRONTEND_URL || 'http://localhost:3000']
-  : ['http://127.0.0.1:3000', 'http://localhost:3000'];
-
 export const build = async () => {
+  const env = getEnv();
+  const CORS_ORIGINS = env.NODE_ENV === 'production'
+    ? [env.FRONTEND_URL]
+    : ['http://127.0.0.1:3000', 'http://localhost:3000'];
+
   const server = Fastify({
     logger: {
-      level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+      level: env.NODE_ENV === 'production' ? 'info' : 'debug',
     },
     genReqId: () => generateRequestId(),
   });
@@ -54,7 +55,7 @@ export const build = async () => {
     exposedHeaders: ['Set-Cookie'],
   });
 
-  await server.register(cookie, { secret: process.env.SESSION_SECRET! });
+  await server.register(cookie, { secret: env.SESSION_SECRET });
   await server.register(multipart, {
     limits: {
       fileSize: 100 * 1024 * 1024,
@@ -95,7 +96,8 @@ if (require.main === module) {
   const start = async () => {
     try {
       const server = await build();
-      const port = Number(process.env.PORT) || 3001;
+      const env = getEnv();
+      const port = env.PORT;
       await server.listen({ port, host: '0.0.0.0' });
 
       // Initialize workers
@@ -126,11 +128,14 @@ if (require.main === module) {
       process.on('SIGTERM', shutdown);
       process.on('SIGINT', shutdown);
     } catch (err) {
-      logger.error({ error: err }, 'Server failed to start');
+      if (err instanceof EnvValidationError) {
+        console.error(err.message);
+      } else {
+        logger.error({ error: err }, 'Server failed to start');
+      }
       process.exit(1);
     }
   };
 
   start();
 }
-

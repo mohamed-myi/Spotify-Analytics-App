@@ -1,9 +1,3 @@
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-// Load .env from project root
-config({ path: resolve(__dirname, '../../../../.env') });
-
 import Fastify, { FastifyInstance } from 'fastify';
 import cookie, { Signer } from '@fastify/cookie';
 import { authMiddleware } from '../../src/middleware/auth';

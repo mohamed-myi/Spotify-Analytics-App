@@ -1,8 +1,3 @@
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-config({ path: resolve(__dirname, '../../../../.env') });
-
 const mockCheckDatabaseHealth = jest.fn();
 const mockPingRedis = jest.fn();
 const mockIsSyncWorkerRunning = jest.fn();

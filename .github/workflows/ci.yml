@@ -40,11 +40,4 @@ jobs:
         run: npm run test:unit --workspace=backend
       
       - name: Run integration tests
-        env:
-
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
         run: npm run test:integration --workspace=backend -- --testPathIgnorePatterns=ingestion

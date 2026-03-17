@@ -1,6 +1,6 @@
 // Mock env module BEFORE any imports to prevent process.exit(1)
 jest.mock('@/env', () => ({
-    env: {
+    getEnv: () => ({
         NODE_ENV: 'test',
         PORT: 3001,
         DATABASE_URL: 'postgresql://mock:5432/db',
@@ -9,7 +9,13 @@ jest.mock('@/env', () => ({
         SPOTIFY_CLIENT_ID: 'mock-client-id',
         SPOTIFY_CLIENT_SECRET: 'mock-client-secret',
         ENCRYPTION_KEY: '0'.repeat(64),
-    },
+        SESSION_SECRET: 'test_session_secret_at_least_32_chars_long',
+        JWT_SECRET: 'test_jwt_secret_value_at_least_32_chars_long',
+        CRON_SECRET: 'test_cron_secret_16ch',
+        SPOTIFY_CB_THRESHOLD: 5,
+        SPOTIFY_CB_RESET_TIMEOUT: 30000,
+        SPOTIFY_CB_WINDOW_DURATION: 60000,
+    }),
 }));
 
 // Mock dependencies before imports

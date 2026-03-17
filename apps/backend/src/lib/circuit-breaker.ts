@@ -1,5 +1,5 @@
 import { SpotifyDownError } from './spotify-errors';
-import { env } from '../env';
+import { getEnv } from '../env';
 import { logger } from './logger';
 
 type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
@@ -125,12 +125,14 @@ const breakerRegistry = new Map<string, CircuitBreaker>();
 
 // Get or create a circuit breaker for the given service key.
 // Enables independent failure domains.
+const circuitEnv = getEnv();
+
 export function getBreaker(serviceKey: string): CircuitBreaker {
     if (!breakerRegistry.has(serviceKey)) {
         breakerRegistry.set(serviceKey, new CircuitBreaker({
-            failureThreshold: env.SPOTIFY_CB_THRESHOLD,
-            resetTimeout: env.SPOTIFY_CB_RESET_TIMEOUT,
-            windowDuration: env.SPOTIFY_CB_WINDOW_DURATION,
+            failureThreshold: circuitEnv.SPOTIFY_CB_THRESHOLD,
+            resetTimeout: circuitEnv.SPOTIFY_CB_RESET_TIMEOUT,
+            windowDuration: circuitEnv.SPOTIFY_CB_WINDOW_DURATION,
         }));
     }
     return breakerRegistry.get(serviceKey)!;

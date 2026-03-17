@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 import { config } from 'dotenv';
 import { resolve } from 'path';
@@ -25,14 +24,29 @@ const envSchema = z.object({
     SPOTIFY_CB_WINDOW_DURATION: z.string().default('60000').transform(Number),
 });
 
-const _env = envSchema.safeParse(process.env);
-
-if (!_env.success) {
-    console.error('Invalid environment variables:');
-    console.error(JSON.stringify(_env.error.format(), null, 2));
-    process.exit(1);
+export class EnvValidationError extends Error {
+    constructor(public readonly details: string) {
+        super(`Invalid environment variables:\n${details}`);
+        this.name = 'EnvValidationError';
+    }
 }
 
-export const env = _env.data;
+let cachedEnv: z.infer<typeof envSchema> | null = null;
+
+function parseEnv(): z.infer<typeof envSchema> {
+    const parsed = envSchema.safeParse(process.env);
+    if (!parsed.success) {
+        const details = JSON.stringify(parsed.error.format(), null, 2);
+        throw new EnvValidationError(details);
+    }
+    return parsed.data;
+}
+
+export function getEnv(): z.infer<typeof envSchema> {
+    if (!cachedEnv) {
+        cachedEnv = parseEnv();
+    }
+    return cachedEnv;
+}
 
 export type Env = z.infer<typeof envSchema>;

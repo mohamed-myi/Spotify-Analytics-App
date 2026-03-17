@@ -1,11 +1,6 @@
 // Compare Routes Integration Tests
 // Tests for /compare/:targetUser endpoint with weighted Jaccard scoring
 
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-config({ path: resolve(__dirname, '../../../../.env') });
-
 // Mock Redis
 jest.mock('../../src/lib/redis', () => ({
     redis: { quit: jest.fn() },

@@ -1,8 +1,3 @@
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-config({ path: resolve(__dirname, '../../../.env') });
-
 jest.mock('ioredis', () => {
     return jest.fn().mockImplementation(() => ({
         on: jest.fn(),

@@ -1,9 +1,3 @@
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-// Load .env from project root 
-config({ path: resolve(__dirname, '../../../../.env') });
-
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';

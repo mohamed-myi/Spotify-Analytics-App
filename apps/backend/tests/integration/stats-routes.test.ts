@@ -1,10 +1,5 @@
 
 
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-config({ path: resolve(__dirname, '../../../../.env') });
-
 
 const mockRedisGet = jest.fn();
 const mockRedisSetex = jest.fn();
