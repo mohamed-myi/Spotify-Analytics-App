@@ -63,40 +63,12 @@ jobs:
             chmod +x deploy.sh
             ./deploy.sh
 
-            echo "============================================"
-            echo "==> SSL/Nginx Health Check"
-            echo "============================================"
+            echo "==> Ensuring SSL cert is current..."
+            sudo certbot renew --non-interactive 2>&1 || echo "Certbot renewal skipped or failed"
 
-            echo "--- Cert status before renewal ---"
-            sudo openssl x509 -in /etc/letsencrypt/live/myiv3.csproject.org/fullchain.pem -noout -dates -subject 2>&1 || echo "FAILED to read cert"
-            sudo ls -la /etc/letsencrypt/live/myiv3.csproject.org/ 2>&1 || echo "Cert dir missing"
-
-            echo "--- Attempting certbot renewal ---"
-            if command -v certbot >/dev/null 2>&1; then
-              sudo certbot renew --force-renewal --non-interactive 2>&1 || echo "Certbot renewal failed"
-            else
-              echo "certbot not installed -- attempting to install"
-              sudo dnf install -y certbot python3-certbot-nginx 2>&1 || sudo yum install -y certbot python3-certbot-nginx 2>&1 || echo "Could not install certbot"
-              sudo certbot renew --force-renewal --non-interactive 2>&1 || echo "Certbot renewal failed after install"
-            fi
-
-            echo "--- Cert status after renewal ---"
-            sudo openssl x509 -in /etc/letsencrypt/live/myiv3.csproject.org/fullchain.pem -noout -dates -subject 2>&1 || echo "FAILED to read cert after renewal"
-
-            echo "--- Restarting nginx ---"
+            echo "==> Restarting nginx..."
             sudo nginx -t 2>&1
             sudo systemctl restart nginx 2>&1
-            sudo systemctl status nginx --no-pager 2>&1 || true
-
-            echo "--- Verification ---"
-            sleep 2
-            curl -sSf -o /dev/null -w "HTTPS status: %{http_code}\n" --max-time 10 https://myiv3.csproject.org/ 2>&1 || echo "HTTPS request failed"
-            sudo ss -tlnp | grep -E ':80|:443' || echo "Nothing listening on 80/443"
-            df -h /
-
-            echo "============================================"
-            echo "==> End SSL Health Check"
-            echo "============================================"
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
