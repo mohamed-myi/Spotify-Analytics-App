@@ -37,14 +37,13 @@ export function setupTopStatsWorker() {
 
             try {
                 const controller = new AbortController();
-                const timeoutTimer = setTimeout(() => {
-                    controller.abort();
-                }, JOB_TIMEOUT_MS);
-
+                let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
                 const timeoutPromise = new Promise<never>((_, reject) => {
-                    setTimeout(() => {
+                    timeoutTimer = setTimeout(() => {
                         reject(new Error('Job timeout'));
+                        controller.abort();
                     }, JOB_TIMEOUT_MS);
+                    timeoutTimer.unref?.();
                 });
 
                 try {
@@ -53,7 +52,9 @@ export function setupTopStatsWorker() {
                         timeoutPromise
                     ]);
                 } finally {
-                    clearTimeout(timeoutTimer);
+                    if (timeoutTimer) {
+                        clearTimeout(timeoutTimer);
+                    }
                 }
 
 
@@ -81,10 +82,11 @@ export function setupTopStatsWorker() {
                     log.warn({ userId, retryAfter: error.retryAfterSeconds, delayMs }, 'Rate limited, pausing queue');
 
                     await topStatsQueue.pause();
-                    setTimeout(async () => {
+                    const resumeTimer = setTimeout(async () => {
                         await topStatsQueue.resume();
                         log.info('Queue resumed after rate limit');
                     }, error.retryAfterSeconds * 1000);
+                    resumeTimer.unref?.();
 
                     await job.moveToDelayed(Date.now() + delayMs, job.token);
                     return;
@@ -139,4 +141,3 @@ export async function closeTopStatsWorker(): Promise<void> {
         workerConnection = null;
     }
 }
-

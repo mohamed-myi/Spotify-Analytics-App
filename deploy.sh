@@ -5,6 +5,9 @@ echo "Deploying MYI-V3..."
 
 cd /home/ec2-user/myi-v3
 
+echo "Verifying Node.js runtime..."
+node -e "const major = Number(process.versions.node.split('.')[0]); if (major !== 22) { console.error('Node 22.x is required. Found ' + process.versions.node); process.exit(1); }"
+
 echo "Pulling latest code..."
 git reset --hard HEAD
 git pull origin main

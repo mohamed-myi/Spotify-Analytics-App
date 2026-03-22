@@ -71,6 +71,7 @@ The system is a **single deployable backend unit** organized into discrete horiz
 | **Fastify API Server** | Stateless HTTP endpoints | AWS EC2 (PM2 managed) |
 | **BullMQ Workers** | Job processors (sync, import, metadata, top stats) | Same EC2 instance |
 | **Next.js Frontend** | Static/SSR pages | AWS EC2 (Next.js) |
+| **Host Scheduler** | Triggers cron routes on a fixed cadence | Same EC2 instance |
 | **Prisma Schema** | Database schema definition | Embedded in backend |
 
 ### External Dependencies (Uncontrolled)
@@ -80,7 +81,6 @@ The system is a **single deployable backend unit** organized into discrete horiz
 | **Spotify Web API** | OAuth, recently-played, top tracks/artists | 401/403/429 errors, outages | Circuit breaker, retry with backoff, token invalidation after 3 failures |
 | **AWS RDS PostgreSQL** | Primary datastore | Connection limits, cost at scale | Connection pooling via Prisma, SSL enforcement |
 | **AWS ElastiCache** | Cache, locks, job queue | Private VPC access only | Security Groups allow EC2 access |
-| **AWS Lambda** | Cron triggers (EventBridge) | Implementation complexity | Decoupled from main app logic |
 
 ### Trust Boundaries
 
@@ -244,4 +244,3 @@ The architecture should be revisited if:
 ### Credits
 
 Written by Mohamed Ibrahim, formatted by Gemini.
-

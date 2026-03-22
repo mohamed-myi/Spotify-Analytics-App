@@ -5,7 +5,12 @@ import axios from 'axios'
 jest.mock('axios', () => ({
     create: jest.fn(() => ({
         get: jest.fn(),
-        post: jest.fn()
+        post: jest.fn(),
+        interceptors: {
+            response: {
+                use: jest.fn()
+            }
+        }
     }))
 }))
 
@@ -18,6 +23,14 @@ describe('api client', () => {
                     'Content-Type': 'application/json'
                 })
             })
+        )
+    })
+
+    it('registers a response interceptor', () => {
+        const axiosInstance = (axios.create as jest.Mock).mock.results[0]?.value
+        expect(axiosInstance.interceptors.response.use).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.any(Function)
         )
     })
 })

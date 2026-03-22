@@ -141,6 +141,7 @@ describe('Top Stats Worker', () => {
         await expect(processingPromise).rejects.toThrow('Job timeout');
 
         expect(capturedSignal?.aborted).toBe(true);
+        expect(jest.getTimerCount()).toBe(0);
 
         jest.useRealTimers();
     });

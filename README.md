@@ -8,14 +8,14 @@
 
 ## 1. Project Evolution
 
-### V1 (Fall 2024)
+### V1
 My first full-stack project was essentially an API wrapper. It relied on a 2,000 line monolithic file that handled authentication, API logic, and data processing in a single thread. It lacked modularity and testing, which made it incapable of handling significant loads. UI rendering was slow because API calls were triggered on-demand, leading to frequent rate-limiting. The cyclomatic complexity made it impossible to maintain.
 
-### V2 (Fall 2025)
+### V2
 This version introduced background polling and exponential backoff to manage rate limits. I added 3-tier caching and session persistence to avoid redundant authentication. While the code was more modular and included initial test cases, it still relied on in-memory caching. This meant data was lost on server restarts and heavy processing risked blocking the Node.js event loop.
 
-### V3 (Fall - Winter 2025)
-After a few months at my internship, I realized that the planning and testing phases were more important than the actual coding. I shifted my focus to architecture and resilience. V3 was designed to solve three persistent issues:
+### V3
+After a few months interning, I realized that the planning and testing phases were more important than the actual coding. I shifted my focus to architecture and resilience. V3 was designed to solve three persistent issues:
 
 *   **Memory Management**: Moving data processing out of the main event loop to prevent crashes.
 *   **Path Decoupling**: Separating the processing and serving paths so ingestion never blocks the API.
@@ -60,7 +60,7 @@ I used to rely heavily on application logic to handle data. This project taught 
 
 | Layer | Technologies |
 |-------|--------------|
-| **Backend** | Node.js, TypeScript, Fastify, BullMQ, AWS Lambda (Cron) |
+| **Backend** | Node.js, TypeScript, Fastify, BullMQ, EC2-hosted cron runner |
 | **Data** | PostgreSQL 17, Prisma 7, AWS ElastiCache (Redis) |
 | **Frontend** | Next.js 16, TailwindCSS, Framer Motion |
 | **Infrastructure** | AWS EC2 (t3.small), Neon DB |
@@ -74,6 +74,7 @@ I used to rely heavily on application logic to handle data. This project taught 
 | [Architecture](docs/architecture.md) | System design, Alternative Considerations |
 | [Data Models](docs/data_models.md) | Entity relationships, constraints, self-critique |
 | [Data Flow](docs/data_flow.md) | Data pipelines, transformation logic |
+| [Operations](docs/operations.md) | Runtime pinning, EC2 scheduler, recovery checks |
 
 ## 6. Setup and Installation
 

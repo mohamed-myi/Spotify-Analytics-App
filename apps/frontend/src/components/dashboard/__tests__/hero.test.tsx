@@ -20,8 +20,6 @@ jest.mock('framer-motion', () => ({
 
 // Mock lucide-react icons
 jest.mock('lucide-react', () => ({
-    Play: () => <span data-testid="play-icon">▶</span>,
-    Info: () => <span data-testid="info-icon">ℹ</span>,
     Music: () => <span data-testid="music-icon">♫</span>,
     User: () => <span data-testid="user-icon">👤</span>
 }))
@@ -61,15 +59,8 @@ describe('Hero', () => {
         expect(screen.getByText('Your most listened artist this year')).toBeInTheDocument()
     })
 
-    it('renders Play History button', () => {
+    it('renders the current top-artist CTA link', () => {
         render(<Hero {...defaultProps} />)
-        expect(screen.getByRole('button', { name: /play artist/i })).toBeInTheDocument()
-        expect(screen.getByTestId('play-icon')).toBeInTheDocument()
-    })
-
-    it('renders More Info button', () => {
-        render(<Hero {...defaultProps} />)
-        expect(screen.getByRole('button', { name: /artist info/i })).toBeInTheDocument()
-        expect(screen.getByTestId('info-icon')).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: /view artist/i })).toBeInTheDocument()
     })
 })

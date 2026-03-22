@@ -131,8 +131,8 @@ describe('AppLayout', () => {
     it('renders footer with sync status', () => {
         render(<AppLayout>Content</AppLayout>)
 
-        expect(screen.getByText(/SYNC STATUS:/)).toBeInTheDocument()
-        expect(screen.getByText('v3.0.0')).toBeInTheDocument()
+        expect(screen.getByTitle('Import Data')).toBeInTheDocument()
+        expect(screen.getByTitle('My Profile')).toBeInTheDocument()
     })
 
     it('renders hamburger menu button on mobile', () => {

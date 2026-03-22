@@ -244,7 +244,7 @@ These invariants must hold across all pipelines:
 | No duplicate listening events | Compound unique index `(userId, trackId, playedAt)` |
 | Tokens never stored in plaintext | AES-256-GCM encryption with auth tag |
 | Stats are eventually consistent | Incremental aggregation on INSERT, backfill capability |
-| Partitions always exist for current/future months | Cron job `POST /cron/partition-maintenance` |
+| Partitions always exist for current/future months | Cron job `POST /cron/manage-partitions` |
 | Invalid tokens are quarantined | `isValid=false` after 3 consecutive failures |
 
 ---

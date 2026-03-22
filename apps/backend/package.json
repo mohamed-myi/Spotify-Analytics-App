@@ -3,9 +3,19 @@
     "version": "0.1.0",
     "private": true,
     "main": "dist/index.js",
+    "engines": {
+        "node": ">=22 <23"
+    },
     "scripts": {
         "dev": "tsx watch src/index.ts",
         "build": "npx prisma generate --schema=../../prisma/schema.prisma && tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
+        "cron:run": "node dist/cli/run-cron.js",
+        "cron:run:dev": "tsx src/cli/run-cron.ts",
+        "cron:seed-sync": "npm run cron:run -- seed-sync",
+        "cron:seed-top-stats": "npm run cron:run -- seed-top-stats",
+        "cron:manage-partitions": "npm run cron:run -- manage-partitions",
+        "cron:cleanup-stale-imports": "npm run cron:run -- cleanup-stale-imports",
+        "cron:queue-status": "npm run cron:run -- queue-status",
         "start": "npx prisma migrate deploy --schema=../../prisma/schema.prisma --config=../../prisma.config.ts && node dist/index.js",
         "test": "jest",
         "test:unit": "jest --selectProjects unit",
