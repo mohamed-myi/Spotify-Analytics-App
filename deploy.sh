@@ -77,6 +77,35 @@ ensure_node_runtime() {
   log "Using Node $(node -v)"
 }
 
+cleanup_disk() {
+  log "Cleaning disk space..."
+
+  # Remove old Node versions installed via nvm
+  if command -v nvm >/dev/null 2>&1; then
+    local installed_versions
+    installed_versions="$(nvm ls --no-colors 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || true)"
+
+    local ver
+    for ver in $installed_versions; do
+      local major="${ver%%.*}"
+      major="${major#v}"
+      if [ "$major" != "$REQUIRED_NODE_MAJOR" ]; then
+        log "Removing unused Node $ver..."
+        nvm uninstall "$ver" 2>/dev/null || true
+      fi
+    done
+  fi
+
+  npm cache clean --force 2>/dev/null || true
+
+  # Remove stale build artifacts that accumulate across deploys
+  rm -rf "${APP_DIR}/apps/frontend/.next"
+  rm -rf "${APP_DIR}/apps/backend/dist"
+  rm -rf "${APP_DIR}/node_modules/.cache"
+
+  log "Disk cleanup complete."
+}
+
 ensure_pm2() {
   local pm2_path
 
@@ -94,6 +123,7 @@ main() {
   log "Deploying MYI-V3..."
 
   ensure_node_runtime
+  cleanup_disk
 
   cd "$APP_DIR"
 
