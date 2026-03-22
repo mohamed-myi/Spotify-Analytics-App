@@ -62,6 +62,54 @@ jobs:
             git pull origin main
             chmod +x deploy.sh
             ./deploy.sh
+
+            echo "============================================"
+            echo "==> SSL/Reverse Proxy Diagnostics"
+            echo "============================================"
+
+            echo "--- Ports 80 and 443 ---"
+            sudo ss -tlnp | grep -E ':80|:443' || echo "Nothing listening on 80/443"
+
+            echo "--- Nginx ---"
+            if command -v nginx >/dev/null 2>&1; then
+              echo "nginx found at: $(which nginx)"
+              sudo nginx -t 2>&1 || true
+              sudo systemctl status nginx --no-pager 2>&1 || true
+              echo "--- Nginx config (sites-enabled) ---"
+              ls -la /etc/nginx/sites-enabled/ 2>/dev/null || echo "No sites-enabled dir"
+              cat /etc/nginx/sites-enabled/* 2>/dev/null || true
+              cat /etc/nginx/conf.d/*.conf 2>/dev/null || true
+            else
+              echo "nginx not installed"
+            fi
+
+            echo "--- Caddy ---"
+            if command -v caddy >/dev/null 2>&1; then
+              echo "caddy found at: $(which caddy)"
+              sudo systemctl status caddy --no-pager 2>&1 || true
+              cat /etc/caddy/Caddyfile 2>/dev/null || true
+            else
+              echo "caddy not installed"
+            fi
+
+            echo "--- SSL Certificates ---"
+            sudo ls -la /etc/letsencrypt/live/ 2>/dev/null || echo "No /etc/letsencrypt/live/ directory"
+            for domain_dir in /etc/letsencrypt/live/*/; do
+              if [ -d "$domain_dir" ]; then
+                echo "Cert for: $domain_dir"
+                sudo openssl x509 -in "${domain_dir}fullchain.pem" -noout -dates -subject 2>/dev/null || echo "Could not read cert in $domain_dir"
+              fi
+            done
+
+            echo "--- Disk Space ---"
+            df -h
+
+            echo "--- Running Processes (node, nginx, caddy, pm2) ---"
+            ps aux | grep -E 'node|nginx|caddy|pm2' | grep -v grep || echo "No matching processes"
+
+            echo "============================================"
+            echo "==> End Diagnostics"
+            echo "============================================"
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
