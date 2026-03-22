@@ -1,28 +1,121 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo "Deploying MYI-V3..."
+APP_DIR="/home/ec2-user/myi-v3"
+NODE_VERSION_SPEC="22"
+REQUIRED_NODE_MAJOR="22"
+NVM_INSTALL_VERSION="v0.40.3"
 
-cd /home/ec2-user/myi-v3
+log() {
+  echo "$1"
+}
 
-echo "Verifying Node.js runtime..."
-node -e "const major = Number(process.versions.node.split('.')[0]); if (major !== 22) { console.error('Node 22.x is required. Found ' + process.versions.node); process.exit(1); }"
+current_node_version() {
+  if ! command -v node >/dev/null 2>&1; then
+    return 1
+  fi
 
-echo "Pulling latest code..."
-git reset --hard HEAD
-git pull origin main
+  node -p "process.versions.node"
+}
 
-echo "Installing dependencies..."
-npm ci
+has_required_node() {
+  local version
 
-echo "Building backend..."
-npm run build --workspace=backend
+  version="$(current_node_version 2>/dev/null || true)"
+  [ "${version%%.*}" = "$REQUIRED_NODE_MAJOR" ]
+}
 
-echo "Building frontend..."
-npm run build --workspace=frontend
+load_nvm() {
+  local nvm_script
+  local candidates=(
+    "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+    "$HOME/.nvm/nvm.sh"
+    "/usr/local/share/nvm/nvm.sh"
+  )
 
-echo "Restarting services..."
-pm2 restart all --update-env
+  for nvm_script in "${candidates[@]}"; do
+    if [ -s "$nvm_script" ]; then
+      export NVM_DIR="${nvm_script%/nvm.sh}"
+      # shellcheck disable=SC1090
+      . "$nvm_script"
+      return 0
+    fi
+  done
 
-echo "Deployment complete!"
-pm2 status
+  return 1
+}
+
+install_nvm() {
+  log "Installing nvm..."
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_INSTALL_VERSION}/install.sh" | bash
+  load_nvm
+}
+
+ensure_node_runtime() {
+  if has_required_node; then
+    log "Using Node $(node -v)"
+    return 0
+  fi
+
+  log "Node ${REQUIRED_NODE_MAJOR}.x is not active. Bootstrapping runtime..."
+
+  if ! load_nvm; then
+    install_nvm
+  fi
+
+  nvm install "$NODE_VERSION_SPEC"
+  nvm alias default "$NODE_VERSION_SPEC" >/dev/null
+  nvm use "$NODE_VERSION_SPEC" >/dev/null
+  hash -r
+
+  if ! has_required_node; then
+    echo "Node ${REQUIRED_NODE_MAJOR}.x is required. Found $(node -v 2>/dev/null || echo 'not installed')" >&2
+    exit 1
+  fi
+
+  log "Using Node $(node -v)"
+}
+
+ensure_pm2() {
+  if command -v pm2 >/dev/null 2>&1; then
+    return 0
+  fi
+
+  log "Installing PM2 for Node $(node -v)..."
+  npm install -g pm2
+  hash -r
+}
+
+main() {
+  log "Deploying MYI-V3..."
+
+  cd "$APP_DIR"
+  ensure_node_runtime
+
+  log "Pulling latest code..."
+  git reset --hard HEAD
+  git pull origin main
+
+  log "Installing dependencies..."
+  npm ci
+
+  log "Building backend..."
+  npm run build --workspace=backend
+
+  log "Building frontend..."
+  npm run build --workspace=frontend
+
+  ensure_pm2
+
+  log "Restarting services..."
+  pm2 restart all --update-env
+  pm2 save >/dev/null
+
+  log "Deployment complete!"
+  pm2 status
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  main "$@"
+fi

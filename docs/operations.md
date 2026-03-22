@@ -3,8 +3,9 @@
 ## Runtime Pinning
 
 - The repo is pinned to Node 22 via `.nvmrc`, `.node-version`, package `engines`, and CI.
-- `deploy.sh` now fails fast if the EC2 host is not running Node 22.
-- Recommended upgrade order for the host is: install Node 22, restart PM2 under Node 22, then redeploy.
+- `deploy.sh` now bootstraps Node 22 via `nvm` on the EC2 host if the active shell is still on an older runtime.
+- If `pm2` is missing after the runtime switch, `deploy.sh` reinstalls it under the active Node 22 toolchain before restarting services.
+- The host still needs outbound access to GitHub and Node.js downloads the first time `nvm` installs Node 22.
 
 ## EC2 Cron Scheduler
 
