@@ -23,6 +23,33 @@ jobs:
           script: |
             cd ~/myi-v3
 
+            # Disk cleanup to prevent "No space left on device" errors
+            echo "==> Freeing disk space..."
+
+            # Load nvm so we can remove old Node versions
+            export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+            if command -v nvm >/dev/null 2>&1; then
+              for ver in $(nvm ls --no-colors 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || true); do
+                major="${ver%%.*}"
+                major="${major#v}"
+                if [ "$major" != "22" ]; then
+                  echo "Removing unused Node $ver..."
+                  nvm uninstall "$ver" 2>/dev/null || true
+                fi
+              done
+            fi
+
+            npm cache clean --force 2>/dev/null || true
+
+            rm -rf apps/frontend/.next
+            rm -rf apps/backend/dist
+            rm -rf node_modules/.cache
+            rm -rf node_modules
+
+            echo "==> Disk cleanup complete."
+
             # Ensure required secrets are in .env (idempotent)
             for VAR in JWT_SECRET SESSION_SECRET CRON_SECRET; do
               VALUE=$(eval echo \$$VAR)
