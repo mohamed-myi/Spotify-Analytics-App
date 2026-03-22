@@ -37,7 +37,7 @@ load_nvm() {
     if [ -s "$nvm_script" ]; then
       export NVM_DIR="${nvm_script%/nvm.sh}"
       # shellcheck disable=SC1090
-      . "$nvm_script"
+      . "$nvm_script" --no-use
       return 0
     fi
   done
@@ -48,7 +48,7 @@ load_nvm() {
 install_nvm() {
   log "Installing nvm..."
   export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-  curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_INSTALL_VERSION}/install.sh" | bash
+  PROFILE=/dev/null curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_INSTALL_VERSION}/install.sh" | PROFILE=/dev/null bash
   load_nvm
 }
 
@@ -78,7 +78,10 @@ ensure_node_runtime() {
 }
 
 ensure_pm2() {
-  if command -v pm2 >/dev/null 2>&1; then
+  local pm2_path
+
+  pm2_path="$(command -v pm2 2>/dev/null || true)"
+  if [ -n "$pm2_path" ] && [[ "$pm2_path" = "$NVM_DIR/"* ]]; then
     return 0
   fi
 
@@ -90,8 +93,9 @@ ensure_pm2() {
 main() {
   log "Deploying MYI-V3..."
 
-  cd "$APP_DIR"
   ensure_node_runtime
+
+  cd "$APP_DIR"
 
   log "Pulling latest code..."
   git reset --hard HEAD
